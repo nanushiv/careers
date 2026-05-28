@@ -1,0 +1,52 @@
+version: "3.9"
+
+services:
+  # ── Redis (for caching + Celery) ──────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+
+  # ── Backend API ───────────────────────────────────────────────────
+  api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file: ./backend/.env
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ── Celery Worker ─────────────────────────────────────────────────
+  worker:
+    build: ./backend
+    env_file: ./backend/.env
+    volumes:
+      - ./backend:/app
+    command: celery -A app.workers.runner worker --loglevel=info -Q analysis,insights
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ── Frontend ──────────────────────────────────────────────────────
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+    env_file: ./frontend/.env.local
+    command: sh -c "npm install && npm run dev"
+
+volumes:
+  redis_data:
