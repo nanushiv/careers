@@ -11,6 +11,7 @@ import logging
 
 from app.core.security import get_current_user
 from app.core.database import supabase
+from app.core.config import is_admin
 from app.services.resume.parser import resume_parser
 
 logger = logging.getLogger(__name__)
@@ -143,10 +144,65 @@ async def update_resume(
     return api_response(data=resp.data[0] if resp.data else {})
 
 
+@router.post("/{resume_id}/rewrite")
+async def trigger_rewrite(
+    resume_id: str,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
+):
+    """Trigger AI resume rewrite. Pro-only. Polls via resume_analyses with analysis_type=rewrite."""
+    user_resp = supabase.table("users").select("id, plan, email").eq(
+        "clerk_id", current_user["clerk_id"]
+    ).execute()
+    if not user_resp.data:
+        raise HTTPException(status_code=404, detail="User not found")
+    user = user_resp.data[0]
+
+    if user["plan"] == "free" and not is_admin(user.get("email", "")):
+        raise HTTPException(
+            status_code=402,
+            detail={"code": "PRO_REQUIRED", "message": "Auto-fix resume is a Pro feature.", "upgrade_url": "/pricing"},
+        )
+
+    resume_resp = supabase.table("resumes").select("*").eq(
+        "id", resume_id
+    ).eq("user_id", user["id"]).execute()
+    if not resume_resp.data:
+        raise HTTPException(status_code=404, detail="Resume not found")
+    resume = resume_resp.data[0]
+    if resume.get("parse_status") != "completed":
+        raise HTTPException(status_code=400, detail="Resume not yet parsed")
+
+    analyses_resp = supabase.table("resume_analyses").select("*").eq(
+        "resume_id", resume_id
+    ).execute()
+    analyses = analyses_resp.data or []
+
+    # Create a placeholder record so frontend can poll immediately
+    record_resp = supabase.table("resume_analyses").insert({
+        "user_id": user["id"],
+        "resume_id": resume_id,
+        "analysis_type": "rewrite",
+        "rewrite_status": "processing",
+    }).execute()
+    record_id = record_resp.data[0]["id"] if record_resp.data else None
+
+    background_tasks.add_task(
+        run_rewrite_background,
+        resume=resume,
+        analyses=analyses,
+        user_id=user["id"],
+        record_id=record_id,
+    )
+
+    return api_response(data={"job_id": record_id, "status": "queued", "estimated_seconds": 30})
+
+
 @router.delete("/{resume_id}")
 async def delete_resume(resume_id: str, current_user: dict = Depends(get_current_user)):
+    from datetime import datetime
     user_id = get_user_id(current_user)
-    supabase.table("resumes").update({"deleted_at": "NOW()"}).eq(
+    supabase.table("resumes").update({"deleted_at": datetime.utcnow().isoformat()}).eq(
         "id", resume_id
     ).eq("user_id", user_id).execute()
     return api_response(data={"deleted": True})
@@ -206,24 +262,70 @@ async def parse_resume_background(resume_id: str, file_content: bytes, file_type
         }).eq("id", resume_id).execute()
 
 
-async def upload_to_r2(content: bytes, key: str, content_type: str) -> str:
-    """Upload file to Cloudflare R2. Returns public URL."""
+async def run_rewrite_background(resume: dict, analyses: list, user_id: str, record_id: str):
+    """Background task: runs AI rewrite, uploads DOCX to R2, updates resume_analyses record."""
+    from app.services.resume.rewriter import resume_rewriter
     try:
-        import boto3
-        from app.core.config import settings
-        s3 = boto3.client(
-            "s3",
-            endpoint_url=f"https://{settings.R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
-            aws_access_key_id=settings.R2_ACCESS_KEY_ID,
-            aws_secret_access_key=settings.R2_SECRET_ACCESS_KEY,
-        )
-        s3.put_object(
-            Bucket=settings.R2_BUCKET_NAME,
-            Key=key,
-            Body=content,
-            ContentType=content_type,
-        )
-        return f"{settings.R2_PUBLIC_URL}/{key}"
+        result = await resume_rewriter.rewrite(resume, analyses, user_id)
+
+        if result.error:
+            logger.error(f"Rewrite failed for record {record_id}: {result.error}")
+            supabase.table("resume_analyses").update({
+                "rewrite_status": "failed",
+            }).eq("id", record_id).execute()
+            return
+
+        update_data = {
+            "rewrite_status": "completed",
+            "improved_resume_url": result.docx_url,
+            "model_used": result.model_used,
+            "tokens_used": result.tokens_used,
+            "cost_usd": result.cost_usd,
+        }
+        if result.pdf_url:
+            update_data["improved_pdf_url"] = result.pdf_url
+        if result.projected_ats_score > 0:
+            update_data["overall_score"] = result.projected_ats_score
+        supabase.table("resume_analyses").update(update_data).eq("id", record_id).execute()
+
+        logger.info(f"Rewrite completed for record {record_id}: DOCX={result.docx_url} PDF={result.pdf_url}")
+
     except Exception as e:
-        logger.warning(f"R2 upload failed (using placeholder URL): {e}")
-        return f"https://files.careeros.ai/{key}"
+        logger.error(f"Rewrite background task crashed: {e}")
+        supabase.table("resume_analyses").update({
+            "rewrite_status": "failed",
+        }).eq("id", record_id).execute()
+
+
+async def upload_to_r2(content: bytes, key: str, content_type: str) -> str:
+    """Upload file to Cloudflare R2, or save locally for dev. Returns public URL."""
+    from app.core.config import settings
+
+    # Use R2 when credentials are configured
+    if settings.R2_ACCOUNT_ID and settings.R2_ACCESS_KEY_ID and settings.R2_SECRET_ACCESS_KEY:
+        try:
+            import boto3
+            s3 = boto3.client(
+                "s3",
+                endpoint_url=f"https://{settings.R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
+                aws_access_key_id=settings.R2_ACCESS_KEY_ID,
+                aws_secret_access_key=settings.R2_SECRET_ACCESS_KEY,
+            )
+            s3.put_object(
+                Bucket=settings.R2_BUCKET_NAME,
+                Key=key,
+                Body=content,
+                ContentType=content_type,
+            )
+            return f"{settings.R2_PUBLIC_URL}/{key}"
+        except Exception as e:
+            logger.warning(f"R2 upload failed, falling back to local: {e}")
+
+    # Local fallback: save to backend/local_files/
+    import os
+    local_dir = os.path.join(os.path.dirname(__file__), "../../../../local_files", os.path.dirname(key))
+    os.makedirs(local_dir, exist_ok=True)
+    local_path = os.path.join(os.path.dirname(__file__), "../../../../local_files", key)
+    with open(local_path, "wb") as f:
+        f.write(content)
+    return f"http://localhost:8000/files/{key}"

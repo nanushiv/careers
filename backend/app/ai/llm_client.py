@@ -93,13 +93,37 @@ class LLMClient:
             temperature=temperature,
         )
         full_prompt = prompt if not json_mode else prompt + "\n\nRespond with valid JSON only, no markdown fences."
-        response = await gemini_model.generate_content_async(full_prompt, generation_config=config)
-        text = response.text
-        try:
-            tokens = response.usage_metadata.total_token_count
-        except Exception:
-            tokens = len(text.split()) * 2  # rough estimate
-        return {"text": text, "tokens": tokens}
+
+        last_exc = None
+        for attempt in range(4):  # up to 3 retries
+            if attempt > 0:
+                wait = 2 ** attempt  # 2s, 4s, 8s
+                logger.warning(f"Gemini 429 rate limit — retrying in {wait}s (attempt {attempt+1}/4)")
+                await asyncio.sleep(wait)
+            try:
+                response = await gemini_model.generate_content_async(full_prompt, generation_config=config)
+                # response.text raises ValueError if content was blocked; access candidates directly
+                try:
+                    text = response.text
+                except Exception:
+                    # Safety block or empty response — try extracting from candidates
+                    text = ""
+                    if response.candidates:
+                        for part in response.candidates[0].content.parts:
+                            text += part.text
+                if not text:
+                    raise ValueError("Gemini returned empty response (possible safety block or MAX_TOKENS)")
+                try:
+                    tokens = response.usage_metadata.total_token_count
+                except Exception:
+                    tokens = len(text.split()) * 2
+                return {"text": text, "tokens": tokens}
+            except Exception as e:
+                if "429" in str(e) or "quota" in str(e).lower() or "rate" in str(e).lower():
+                    last_exc = e
+                    continue
+                raise
+        raise last_exc
 
     async def _call_openrouter(
         self, prompt: str, model: str, max_tokens: int, temperature: float

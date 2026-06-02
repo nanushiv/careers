@@ -103,7 +103,7 @@ class CostGovernor:
 
         # Pro users get flash for everything — no pro upgrade needed for flash
         # Pro price_id in future = gemini-pro for premium quality
-        return model_map.get(analysis_type, "gemini-1.5-flash")
+        return model_map.get(analysis_type, "gemini-2.5-flash-lite")
 
 
 cost_governor = CostGovernor()

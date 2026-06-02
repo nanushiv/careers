@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useDropzone } from "react-dropzone";
 import {
-  Upload, FileText, Star, Trash2, Brain, BarChart2, Loader2, CheckCircle2
+  Upload, FileText, Star, Trash2, Brain, Loader2, CheckCircle2
 } from "lucide-react";
 import { api, Resume } from "@/lib/api";
 import { formatDistanceToNow } from "date-fns";
@@ -18,6 +18,7 @@ export default function ResumePage() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [jdModal, setJdModal] = useState<Resume | null>(null);
   const [jdText, setJdText] = useState("");
+  const pollingRef = useRef<Record<string, NodeJS.Timeout>>({});
 
   const load = async () => {
     const token = await getToken();
@@ -27,7 +28,43 @@ export default function ResumePage() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    return () => {
+      // Clear all polling on unmount
+      Object.values(pollingRef.current).forEach(clearInterval);
+    };
+  }, []);
+
+  // Poll a single resume until parse_status === "completed" | "failed"
+  const pollParseStatus = useCallback((resumeId: string) => {
+    if (pollingRef.current[resumeId]) return; // already polling
+
+    const interval = setInterval(async () => {
+      const token = await getToken();
+      if (!token) return;
+      const resp = await api.listResumes(token);
+      if (!resp.data) return;
+      const updated = resp.data.find((r) => r.id === resumeId);
+      if (!updated) return;
+
+      if (updated.parse_status === "completed" || updated.parse_status === "failed") {
+        clearInterval(pollingRef.current[resumeId]);
+        delete pollingRef.current[resumeId];
+        setResumes((prev) => prev.map((r) => r.id === resumeId ? updated : r));
+      }
+    }, 2500);
+
+    pollingRef.current[resumeId] = interval;
+
+    // Safety timeout: stop after 2 minutes
+    setTimeout(() => {
+      if (pollingRef.current[resumeId]) {
+        clearInterval(pollingRef.current[resumeId]);
+        delete pollingRef.current[resumeId];
+      }
+    }, 120000);
+  }, [getToken]);
 
   const onDrop = useCallback(async (files: File[]) => {
     const file = files[0];
@@ -40,7 +77,6 @@ export default function ResumePage() {
       const token = await getToken();
       if (!token) return;
 
-      // Upload to backend
       const formData = new FormData();
       formData.append("file", file);
       formData.append("version_label", file.name.replace(/\.[^.]+$/, ""));
@@ -55,6 +91,8 @@ export default function ResumePage() {
       if (data.success && data.data) {
         setResumes((prev) => [data.data, ...prev]);
         setUploadProgress(100);
+        // Start polling so "Run Analysis" button enables automatically
+        pollParseStatus(data.data.id);
       }
     } catch (e) {
       console.error("Upload failed:", e);
@@ -62,7 +100,7 @@ export default function ResumePage() {
       setUploading(false);
       setTimeout(() => setUploadProgress(0), 2000);
     }
-  }, [getToken]);
+  }, [getToken, pollParseStatus]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -71,16 +109,14 @@ export default function ResumePage() {
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
     },
     maxFiles: 1,
-    maxSize: 10 * 1024 * 1024, // 10MB
+    maxSize: 10 * 1024 * 1024,
   });
 
   const handleSetPrimary = async (id: string) => {
     const token = await getToken();
     if (!token) return;
     await api.setPrimaryResume(token, id);
-    setResumes((prev) =>
-      prev.map((r) => ({ ...r, is_primary: r.id === id }))
-    );
+    setResumes((prev) => prev.map((r) => ({ ...r, is_primary: r.id === id })));
   };
 
   const handleDelete = async (id: string) => {
@@ -104,9 +140,13 @@ export default function ResumePage() {
     setJdModal(null);
 
     try {
+      const analysisTypes = jdText.trim()
+        ? ["ats", "recruiter", "readiness", "role_fit"]
+        : ["recruiter", "readiness"];
+
       const resp = await api.triggerAnalysis(token, {
         resume_id: jdModal.id,
-        analysis_types: ["ats", "recruiter", "readiness"],
+        analysis_types: analysisTypes,
         ...(jdText.trim() ? { jd_text: jdText.trim() } : {}),
       });
 
@@ -115,7 +155,6 @@ export default function ResumePage() {
       }
     } catch (e) {
       console.error("Analysis trigger failed:", e);
-    } finally {
       setAnalyzing(null);
     }
   };
@@ -129,7 +168,7 @@ export default function ResumePage() {
         </p>
       </div>
 
-      {/* ── Upload Zone ───────────────────────────────────────────── */}
+      {/* Upload Zone */}
       <div
         {...getRootProps()}
         className={`relative border-2 border-dashed rounded-2xl p-10 mb-8 text-center cursor-pointer transition-all ${
@@ -163,7 +202,7 @@ export default function ResumePage() {
         )}
       </div>
 
-      {/* ── Resume List ───────────────────────────────────────────── */}
+      {/* Resume List */}
       {loading ? (
         <div className="space-y-4">
           {[...Array(2)].map((_, i) => (
@@ -189,39 +228,40 @@ export default function ResumePage() {
           ))}
         </div>
       )}
-    {/* JD Modal */}
-    {jdModal && (
-      <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
-        <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-lg">
-          <h3 className="text-lg font-semibold text-white mb-1">Run AI Analysis</h3>
-          <p className="text-sm text-gray-400 mb-4">
-            Paste a job description for keyword matching + roadmap. Skip to get Recruiter View + PM Readiness only.
-          </p>
-          <textarea
-            value={jdText}
-            onChange={e => setJdText(e.target.value)}
-            placeholder="Paste job description here (optional)..."
-            rows={8}
-            className="w-full px-3 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-violet-500 resize-none"
-          />
-          <div className="flex gap-3 mt-4">
-            <button
-              onClick={() => setJdModal(null)}
-              className="flex-1 py-2.5 border border-gray-700 text-gray-400 rounded-xl text-sm hover:border-gray-600 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={runAnalysis}
-              className="flex-1 py-2.5 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2"
-            >
-              <Brain className="w-4 h-4" />
-              {jdText.trim() ? "Analyze with JD" : "Analyze without JD"}
-            </button>
+
+      {/* JD Modal */}
+      {jdModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-lg">
+            <h3 className="text-lg font-semibold text-white mb-1">Run AI Analysis</h3>
+            <p className="text-sm text-gray-400 mb-4">
+              Paste a job description for ATS keyword matching + Role Fit score. Skip to get Recruiter View + PM Readiness only.
+            </p>
+            <textarea
+              value={jdText}
+              onChange={e => setJdText(e.target.value)}
+              placeholder="Paste job description here (optional)..."
+              rows={8}
+              className="w-full px-3 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-violet-500 resize-none"
+            />
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={() => setJdModal(null)}
+                className="flex-1 py-2.5 border border-gray-700 text-gray-400 rounded-xl text-sm hover:border-gray-600 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={runAnalysis}
+                className="flex-1 py-2.5 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                <Brain className="w-4 h-4" />
+                {jdText.trim() ? "Analyze with JD (4 analyses)" : "Analyze without JD (2 analyses)"}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    )}
+      )}
     </div>
   );
 }
@@ -239,12 +279,14 @@ function ResumeCard({
   onAnalyze: (resume: Resume) => void;
   isAnalyzing: boolean;
 }) {
-  const parseStatusColor = {
-    completed: "text-green-400",
-    processing: "text-amber-400",
-    pending: "text-gray-400",
-    failed: "text-red-400",
-  }[resume.parse_status] || "text-gray-400";
+  const isParsing = resume.parse_status === "pending" || resume.parse_status === "processing";
+
+  const parseStatusEl = {
+    completed: <span className="text-xs text-green-400 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Ready</span>,
+    processing: <span className="text-xs text-amber-400 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Parsing...</span>,
+    pending: <span className="text-xs text-amber-400 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Parsing...</span>,
+    failed: <span className="text-xs text-red-400">Parse failed</span>,
+  }[resume.parse_status] ?? null;
 
   return (
     <div className={`bg-gray-900 border rounded-xl p-5 transition-all ${
@@ -264,9 +306,7 @@ function ResumeCard({
                   Primary
                 </span>
               )}
-              <span className={`text-xs ${parseStatusColor} capitalize`}>
-                {resume.parse_status}
-              </span>
+              {parseStatusEl}
             </div>
             <p className="text-xs text-gray-500 mt-0.5">{resume.file_name}</p>
 
@@ -310,15 +350,18 @@ function ResumeCard({
           )}
           <button
             onClick={() => onAnalyze(resume)}
-            disabled={isAnalyzing || resume.parse_status !== "completed"}
-            className="flex items-center gap-2 px-3 py-1.5 bg-violet-600/20 hover:bg-violet-600/30 disabled:opacity-40 text-violet-300 text-xs font-medium rounded-lg border border-violet-500/30 transition-colors"
+            disabled={isAnalyzing || isParsing}
+            title={isParsing ? "Waiting for resume to finish parsing..." : "Run AI Analysis"}
+            className="flex items-center gap-2 px-3 py-1.5 bg-violet-600/20 hover:bg-violet-600/30 disabled:opacity-40 disabled:cursor-not-allowed text-violet-300 text-xs font-medium rounded-lg border border-violet-500/30 transition-colors"
           >
             {isAnalyzing ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : isParsing ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
             ) : (
               <Brain className="w-3.5 h-3.5" />
             )}
-            {isAnalyzing ? "Analyzing..." : "Run Analysis"}
+            {isAnalyzing ? "Analyzing..." : isParsing ? "Parsing..." : "Run Analysis"}
           </button>
           <button
             onClick={() => onDelete(resume.id)}

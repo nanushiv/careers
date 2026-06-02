@@ -1,7 +1,7 @@
 "use client";
 
 import { Analysis } from "@/lib/api";
-import { Eye, ThumbsUp, ThumbsDown, MessageSquare } from "lucide-react";
+import { Eye, ThumbsUp, ThumbsDown, MessageSquare, Target } from "lucide-react";
 
 const LIKELIHOOD_CONFIG = {
   low: { label: "Unlikely to shortlist", color: "text-red-400", bg: "bg-red-500/10" },
@@ -20,6 +20,7 @@ export function RecruiterPerceptionPanel({ analysis }: { analysis: Analysis }) {
     immediate_concerns = [],
     positioning_gaps = [],
     narrative_story,
+    vs_typical_applicant,
     recommended_changes = [],
   } = signals;
 
@@ -85,6 +86,32 @@ export function RecruiterPerceptionPanel({ analysis }: { analysis: Analysis }) {
           </div>
         </div>
       </div>
+
+      {/* Positioning gaps */}
+      {positioning_gaps.length > 0 && (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <p className="text-sm font-semibold text-amber-400 mb-3 flex items-center gap-2">
+            <Target className="w-4 h-4" /> Positioning Gaps — How to Fix Your Story
+          </p>
+          <div className="space-y-3">
+            {positioning_gaps.map((gap: any, i: number) => (
+              <div key={i} className="bg-amber-950/20 border border-amber-500/20 rounded-lg p-3">
+                <p className="text-xs font-semibold text-amber-300">{gap.gap}</p>
+                <p className="text-xs text-gray-400 mt-1 italic">Recruiter thinks: "{gap.what_recruiter_thinks}"</p>
+                <p className="text-xs text-green-400 mt-1">→ {gap.how_to_fix}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* vs typical applicant */}
+      {vs_typical_applicant && (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <p className="text-xs font-semibold text-gray-400 mb-1">vs. Typical Applicant Pool</p>
+          <p className="text-sm text-gray-300">{vs_typical_applicant}</p>
+        </div>
+      )}
 
       {/* Recommended changes */}
       {recommended_changes.length > 0 && (

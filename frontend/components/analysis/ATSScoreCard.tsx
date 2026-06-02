@@ -16,17 +16,18 @@ export function ATSScoreCard({ analysis }: { analysis: Analysis }) {
           <div className="text-5xl font-bold" style={{ color: scoreColor }}>
             {Math.round(score)}
           </div>
-          <div className="text-xs text-gray-400 mt-1">ATS Score</div>
+          <div className="text-xs text-gray-400 mt-1">Match Score</div>
+          <div className="text-[10px] text-gray-600 mt-0.5 text-center">vs this JD</div>
         </div>
-        <div className="md:col-span-3 grid grid-cols-3 gap-3">
+        <div className="md:col-span-3 grid grid-cols-2 gap-3">
           {[
-            { label: "Keywords", score: analysis.keyword_score },
-            { label: "Format", score: analysis.format_score },
-            { label: "Experience", score: analysis.experience_score },
-          ].map(({ label, score: s }) => (
+            { label: "Keyword Match", score: analysis.keyword_score, hint: "% of JD keywords found" },
+            { label: "Format Score", score: analysis.format_score, hint: "ATS-safe structure" },
+          ].map(({ label, score: s, hint }) => (
             <div key={label} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-              <p className="text-xs text-gray-400 mb-2">{label}</p>
-              <p className="text-2xl font-bold text-white">{Math.round(s ?? 0)}</p>
+              <p className="text-xs text-gray-400 mb-1">{label}</p>
+              <p className="text-2xl font-bold text-white">{Math.round(s ?? 0)}%</p>
+              <p className="text-[10px] text-gray-500 mt-0.5">{hint}</p>
               <div className="w-full h-1.5 bg-gray-800 rounded-full mt-2 overflow-hidden">
                 <div
                   className="h-full rounded-full bg-violet-500"

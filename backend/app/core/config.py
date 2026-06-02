@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     STRIPE_PRO_PRICE_ID: str = ""        # USD $29/month (global)
     STRIPE_PRO_PRICE_ID_IN: str = ""     # INR ₹999/month (India)
 
+    # Admin
+    ADMIN_EMAILS: str = "shivani27chaudhary@gmail.com"
+    BYPASS_PRO_GATE: bool = False
+
     # Analytics
     POSTHOG_API_KEY: str = ""
     POSTHOG_HOST: str = "https://app.posthog.com"
@@ -67,3 +71,11 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def is_admin(email: str = "") -> bool:
+    """Return True if pro gate should be bypassed (env flag or admin email)."""
+    if settings.BYPASS_PRO_GATE:
+        return True
+    admins = [e.strip().lower() for e in settings.ADMIN_EMAILS.split(",") if e.strip()]
+    return bool(email) and email.lower() in admins

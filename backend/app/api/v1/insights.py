@@ -21,10 +21,10 @@ def api_response(data=None, error=None):
 def get_user_id(current_user: dict) -> str:
     resp = supabase.table("users").select("id").eq(
         "clerk_id", current_user["clerk_id"]
-    ).single().execute()
+    ).limit(1).execute()
     if not resp.data:
         raise HTTPException(status_code=404, detail="User not found")
-    return resp.data["id"]
+    return resp.data[0]["id"]
 
 
 @router.get("")
@@ -50,10 +50,10 @@ async def get_insight(insight_id: str, current_user: dict = Depends(get_current_
     user_id = get_user_id(current_user)
     resp = supabase.table("ai_insights").select("*").eq(
         "id", insight_id
-    ).eq("user_id", user_id).single().execute()
+    ).eq("user_id", user_id).limit(1).execute()
     if not resp.data:
         raise HTTPException(status_code=404, detail="Insight not found")
-    return api_response(data=resp.data)
+    return api_response(data=resp.data[0])
 
 
 @router.post("/{insight_id}/dismiss")

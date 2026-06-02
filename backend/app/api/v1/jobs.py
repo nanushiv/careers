@@ -8,6 +8,7 @@ import logging
 
 from app.core.security import get_current_user
 from app.core.database import supabase
+from app.core.config import is_admin
 from app.services.jobs.suggestions import job_suggestions_service
 
 logger = logging.getLogger(__name__)
@@ -36,8 +37,8 @@ async def get_job_suggestions(
 
     user = user_resp.data[0]
 
-    # Gate behind Pro plan
-    if user.get("plan", "free") == "free":
+    # Gate behind Pro plan (admin bypass)
+    if user.get("plan", "free") == "free" and not is_admin(user.get("email", "")):
         raise HTTPException(
             status_code=402,
             detail={

@@ -10,9 +10,11 @@ import logging
 
 from app.core.security import get_current_user
 from app.core.database import get_db, supabase
+from app.core.config import is_admin
 from app.services.analysis.ats_analyzer import ats_analyzer
 from app.services.analysis.recruiter_analyzer import recruiter_analyzer
 from app.services.analysis.readiness_scorer import readiness_scorer
+from app.services.analysis.role_fit_analyzer import role_fit_analyzer
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -76,7 +78,7 @@ async def trigger_analysis(
     ).execute()
     quota = quota_resp.data[0] if quota_resp.data else None
 
-    if quota and quota["analyses_used"] >= quota["analyses_limit"] and user["plan"] == "free":
+    if quota and quota["analyses_used"] >= quota["analyses_limit"] and user["plan"] == "free" and not is_admin(user.get("email", "")):
         raise HTTPException(
             status_code=402,
             detail={
@@ -327,6 +329,42 @@ async def run_analyses_background(
                         "cache_hit": d.get("cache_hit", False),
                     }
 
+                elif analysis_type == "role_fit":
+                    if not jd_text:
+                        logger.warning("role_fit skipped: no JD text provided")
+                        continue
+                    result = await role_fit_analyzer.analyze(
+                        resume_text=resume_text,
+                        jd_text=jd_text,
+                        resume_sections=resume.get("structured_data"),
+                        resume_id=resume["id"],
+                        jd_id=jd_id,
+                        user_id=user["id"],
+                        user_plan=user.get("plan", "free"),
+                    )
+                    d = result.to_dict()
+                    analysis_record = {
+                        "user_id": user["id"],
+                        "resume_id": resume["id"],
+                        "jd_id": jd_id,
+                        "analysis_type": "role_fit",
+                        "overall_score": result.role_fit_score,
+                        "role_fit_analysis": {
+                            "role_fit_score": d.get("role_fit_score"),
+                            "semantic_score": d.get("semantic_score"),
+                            "fit_rationale": d.get("fit_rationale"),
+                            "application_recommendation": d.get("application_recommendation"),
+                            "dimension_scores": d.get("dimension_scores", {}),
+                            "strongest_alignment": d.get("strongest_alignment", []),
+                            "critical_gaps": d.get("critical_gaps", []),
+                            "positioning_advice": d.get("positioning_advice"),
+                        },
+                        "model_used": d.get("model_used"),
+                        "tokens_used": d.get("tokens_used", 0),
+                        "cost_usd": d.get("cost_usd", 0),
+                        "cache_hit": d.get("cache_hit", False),
+                    }
+
                 if analysis_record is None:
                     continue
 
@@ -338,8 +376,10 @@ async def run_analyses_background(
                 results.append({"type": analysis_type, "error": str(e)})
 
         # Update quota
+        quota_resp = supabase.table("usage_quotas").select("analyses_used").eq("user_id", user["id"]).execute()
+        current_used = quota_resp.data[0]["analyses_used"] if quota_resp.data else 0
         supabase.table("usage_quotas").update({
-            "analyses_used": supabase.rpc("increment", {"x": 1})
+            "analyses_used": current_used + 1
         }).eq("user_id", user["id"]).execute()
 
         # Mark job complete

@@ -113,14 +113,17 @@ class ATSAnalyzer:
             try:
                 resume_emb = await llm_client.embed(resume_text[:4000])
                 jd_emb = await llm_client.embed(jd_text[:4000])
-                similarity = cosine_similarity(
+                raw_sim = float(cosine_similarity(
                     np.array(resume_emb).reshape(1, -1),
                     np.array(jd_emb).reshape(1, -1),
-                )[0][0]
-                result.semantic_score = round(float(similarity) * 100, 1)
+                )[0][0])
+                # Cosine similarity on text embeddings typically ranges 0.55–0.95
+                # Normalize to 0–100 so it doesn't artificially suppress scores
+                normalized = (raw_sim - 0.50) / 0.45 * 100  # 0.50→0, 0.95→100
+                result.semantic_score = round(max(0.0, min(100.0, normalized)), 1)
             except Exception as e:
                 logger.warning(f"Embedding similarity failed: {e}")
-                result.semantic_score = 50.0
+                result.semantic_score = 65.0
 
         # ── Layer 3: LLM enrichment (conditional) ─────────────────────────────
         llm_decision = await cost_governor.can_use_llm(
@@ -176,19 +179,18 @@ class ATSAnalyzer:
                 logger.error(f"LLM ATS enrichment failed: {e}")
 
         # ── Compute overall score ─────────────────────────────────────────────
-        weights = {
-            "keyword": 0.40,
-            "semantic": 0.25,
-            "format": 0.20,
-            "experience": 0.15,
-        }
-        result.overall_score = round(
-            result.keyword_score * weights["keyword"]
-            + result.semantic_score * weights["semantic"]
-            + result.format_score * weights["format"]
-            + (result.experience_score or 60) * weights["experience"],
-            1,
-        )
+        # Only use what we actually measured — no padding or fake defaults
+        # keyword (45%) + format (30%) + semantic (25% only when JD present)
+        if jd_text:
+            result.overall_score = round(
+                result.keyword_score * 0.45
+                + result.format_score * 0.30
+                + result.semantic_score * 0.25,
+                1,
+            )
+        else:
+            # No JD — can only assess format quality
+            result.overall_score = round(result.format_score, 1)
 
         # Build improvements from gaps
         result.improvements = [

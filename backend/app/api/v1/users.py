@@ -8,6 +8,7 @@ import logging
 
 from app.core.security import get_current_user
 from app.core.database import supabase
+from app.core.config import is_admin
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -53,6 +54,10 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         user = _create_user(current_user["clerk_id"], current_user.get("email", ""))
         if not user:
             raise HTTPException(status_code=500, detail="Failed to create user")
+    # Admin override: always return pro plan
+    if is_admin(user.get("email", "")):
+        user = dict(user)
+        user["plan"] = "pro"
     return api_response(data=user)
 
 

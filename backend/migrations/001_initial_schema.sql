@@ -287,9 +287,7 @@ CREATE TABLE applications (
 
   -- Follow-up tracking
   next_follow_up_date   DATE,
-  days_since_last_event INT GENERATED ALWAYS AS (
-    EXTRACT(DAY FROM (NOW() - last_stage_change_at))::INT
-  ) STORED,
+  days_since_last_event INT,
 
   created_at            TIMESTAMPTZ DEFAULT NOW(),
   updated_at            TIMESTAMPTZ DEFAULT NOW(),

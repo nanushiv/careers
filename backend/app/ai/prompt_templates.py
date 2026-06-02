@@ -210,6 +210,46 @@ Return JSON only:
 }}
 """,
 
+    # ── Resume Auto-Fix Rewrite ───────────────────────────────────────────────
+    "resume_rewrite_v1": """
+You are an expert ATS optimization specialist. Your ONLY goal is to rewrite this resume to score 85+ on ATS systems (Workday, Greenhouse, Lever, iCIMS) for this specific job.
+
+ORIGINAL RESUME:
+{original_sections}
+
+=== CRITICAL: MISSING KEYWORDS (EVERY SINGLE ONE MUST APPEAR IN OUTPUT) ===
+{missing_keywords}
+
+ADDITIONAL GAPS TO FIX:
+{gaps_context}
+
+RECRUITER-RECOMMENDED CHANGES:
+{recommended_changes}
+
+=== STRICT RULES — VIOLATING ANY RULE = FAILURE ===
+1. EVERY keyword in "MISSING KEYWORDS" MUST appear verbatim in the output — check each one
+2. Add a "Core Competencies" or "Key Skills" section listing ALL keywords as a comma-separated list (ATS parsers love this)
+3. Each bullet must start with a strong action verb (Led, Built, Designed, Drove, Increased, etc.)
+4. Add metrics to every bullet where implied: use [X%], [X users], [$XM] as placeholders if real numbers aren't given
+5. The summary MUST contain the job title and 3+ keywords from the missing list
+6. Preserve ALL factual info: company names, job titles, dates, education — do NOT invent anything
+7. Do NOT remove any existing content — only strengthen it
+8. Keep formatting clean: no tables, no text boxes, no special characters (ATS-safe)
+9. Each keyword should appear 2-3 times total across the resume (in skills, summary, and bullets)
+
+Respond with valid JSON only. Use \\n for newlines inside strings:
+{{
+  "header": "Name\\nEmail | Phone | LinkedIn | Location",
+  "summary": "3-4 sentence targeted summary with job title + keywords woven in",
+  "core_competencies": "keyword1 • keyword2 • keyword3 • ... (ALL missing keywords must be here)",
+  "experience": "COMPANY NAME | TITLE | DATES\\n• Action verb + achievement + metric\\n• ...(all jobs)",
+  "education": "full education section",
+  "skills": "Technical: ...\\nTools: ...\\nMethodologies: ... (comprehensive, includes ALL missing keywords)",
+  "sections_changed": ["header", "summary", "core_competencies", "experience", "skills"],
+  "changes_summary": "2-3 sentences on what changed and which keywords were added"
+}}
+""",
+
     # ── Weekly Insight Synthesis ──────────────────────────────────────────────
     "weekly_synthesis_v1": """
 You are a strategic career advisor reviewing a job seeker's week.
@@ -258,6 +298,7 @@ ACTIVE_VERSIONS = {
     "readiness": "pm_readiness_v1",
     "interview_questions": "interview_questions_v2",
     "weekly_synthesis": "weekly_synthesis_v1",
+    "rewrite": "resume_rewrite_v1",
 }
 
 

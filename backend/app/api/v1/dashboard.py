@@ -17,10 +17,10 @@ router = APIRouter()
 def get_user(current_user: dict) -> dict:
     resp = supabase.table("users").select("*").eq(
         "clerk_id", current_user["clerk_id"]
-    ).single().execute()
+    ).limit(1).execute()
     if not resp.data:
         raise HTTPException(status_code=404, detail="User not found")
-    return resp.data
+    return resp.data[0]
 
 
 def api_response(data=None, error=None):

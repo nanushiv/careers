@@ -139,31 +139,25 @@ class RuleEngine:
 
     def _analyze_keywords(self, resume_text: str, jd_text: str) -> dict:
         resume_lower = resume_text.lower()
-        jd_lower = jd_text.lower()
 
-        # Extract meaningful phrases from JD (2-3 word phrases + single keywords)
         jd_keywords = self._extract_keywords(jd_text)
         required_kw = jd_keywords[:15]   # Top 15 = "required"
         preferred_kw = jd_keywords[15:30]  # Next 15 = "preferred"
 
-        required_found = [kw for kw in required_kw if kw.lower() in resume_lower]
-        required_missing = [kw for kw in required_kw if kw.lower() not in resume_lower]
-        preferred_found = [kw for kw in preferred_kw if kw.lower() in resume_lower]
-        preferred_missing = [kw for kw in preferred_kw if kw.lower() not in resume_lower]
+        required_found = [kw for kw in required_kw if self._kw_in_text(kw, resume_lower)]
+        required_missing = [kw for kw in required_kw if not self._kw_in_text(kw, resume_lower)]
+        preferred_found = [kw for kw in preferred_kw if self._kw_in_text(kw, resume_lower)]
+        preferred_missing = [kw for kw in preferred_kw if not self._kw_in_text(kw, resume_lower)]
 
-        # Score: required keywords weighted more heavily
         if len(required_kw) == 0:
             keyword_score = 50.0
         else:
             required_pct = len(required_found) / len(required_kw)
             preferred_pct = len(preferred_found) / max(len(preferred_kw), 1)
-            keyword_score = (required_pct * 70) + (preferred_pct * 30)
+            # More generous scoring: matching all required = 85, all preferred adds up to 15 more
+            keyword_score = (required_pct * 85) + (preferred_pct * 15)
 
-        # Keyword density
-        density = {
-            kw: resume_lower.count(kw.lower())
-            for kw in required_found
-        }
+        density = {kw: resume_lower.count(kw.lower()) for kw in required_found}
 
         return {
             "required_found": required_found,
@@ -174,30 +168,54 @@ class RuleEngine:
             "density": density,
         }
 
+    def _kw_in_text(self, kw: str, text_lower: str) -> bool:
+        """Check keyword presence with word-boundary awareness for short terms."""
+        kw_l = kw.lower()
+        if kw_l not in text_lower:
+            return False
+        # For short acronyms/terms (≤5 chars), require word boundary to avoid false matches
+        if len(kw_l) <= 5:
+            return bool(re.search(r'\b' + re.escape(kw_l) + r'\b', text_lower))
+        return True
+
     def _extract_keywords(self, text: str) -> list[str]:
-        """Extract meaningful keywords from JD text."""
-        # Remove common stop words and extract meaningful terms
+        """Extract single-word and compound tech keywords from JD text.
+        Avoids long phrases — substring matching works best on short terms."""
         stop_words = {
-            "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
-            "of", "with", "is", "are", "was", "were", "be", "been", "have", "has",
-            "will", "would", "can", "could", "should", "may", "might", "must",
-            "you", "we", "our", "your", "this", "that", "they", "their",
-            "experience", "work", "team", "company", "role", "position", "job",
+            "the", "and", "for", "with", "this", "that", "have", "will",
+            "from", "they", "their", "what", "when", "where", "which",
+            "able", "also", "into", "been", "more", "some", "than",
+            "both", "each", "such", "your", "about", "other", "these",
+            "work", "team", "role", "join", "help", "make", "build",
+            "looking", "seeking", "required", "preferred", "strong",
+            "excellent", "good", "great", "using", "used", "across",
         }
 
-        # Extract 1-3 word phrases
-        words = re.findall(r'\b[A-Za-z][A-Za-z\s-]{2,30}\b', text)
-        keywords = []
-        seen = set()
+        # Extract individual words (no spaces) — most reliable for matching
+        single_words = re.findall(r'\b[A-Za-z][A-Za-z0-9+#.-]{2,25}\b', text)
+        # Extract explicit 2-word technical phrases (CamelCase or Title Case or known patterns)
+        two_word = re.findall(
+            r'\b(?:[A-Z][a-z]+|[A-Z]{2,})\s+(?:[A-Z][a-z]+|[A-Z]{2,})\b', text
+        )
 
-        for word in words:
-            word = word.strip().lower()
-            if word not in stop_words and len(word) > 3 and word not in seen:
-                seen.add(word)
-                keywords.append(word)
+        seen = set()
+        keywords = []
+
+        for w in single_words:
+            w_l = w.lower()
+            if w_l not in stop_words and len(w_l) >= 3 and w_l not in seen:
+                seen.add(w_l)
+                keywords.append(w_l)
+
+        for phrase in two_word:
+            p_l = phrase.lower()
+            if p_l not in seen and len(p_l) > 6:
+                seen.add(p_l)
+                keywords.append(p_l)
 
         # Score by frequency in JD
-        freq = {kw: text.lower().count(kw) for kw in keywords}
+        text_lower = text.lower()
+        freq = {kw: text_lower.count(kw) for kw in keywords}
         sorted_kw = sorted(keywords, key=lambda k: freq[k], reverse=True)
         return sorted_kw[:30]
 

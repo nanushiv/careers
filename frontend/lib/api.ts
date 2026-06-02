@@ -42,8 +42,11 @@ export interface Resume {
 
 export interface Analysis {
   id: string;
-  analysis_type: "ats" | "recruiter" | "role_fit" | "readiness";
+  analysis_type: "ats" | "recruiter" | "role_fit" | "readiness" | "rewrite";
   overall_score?: number;
+  rewrite_status?: "pending" | "processing" | "completed" | "failed";
+  improved_resume_url?: string;
+  improved_pdf_url?: string;
   gaps: Gap[];
   strengths: Strength[];
   improvements: Improvement[];
@@ -250,6 +253,14 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ is_primary: true }),
     }, token);
+  },
+
+  async triggerRewrite(token: string, resumeId: string) {
+    return fetchApi<{ job_id: string; status: string; estimated_seconds: number }>(
+      `/resumes/${resumeId}/rewrite`,
+      { method: "POST" },
+      token
+    );
   },
 
   // ── Analyses ──────────────────────────────────────────────────────────────

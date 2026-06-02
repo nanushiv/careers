@@ -2,10 +2,12 @@
 CareerOS Backend — FastAPI Application
 """
 from contextlib import asynccontextmanager
+import os
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 import httpx
 import sentry_sdk
 import logging
@@ -86,6 +88,11 @@ async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"success": False, "error": {"code": "INTERNAL_ERROR", "message": "An unexpected error occurred."}})
 
 app.include_router(api_router, prefix="/v1")
+
+# Serve locally uploaded files (dev fallback when R2 is not configured)
+_local_files_dir = os.path.join(os.path.dirname(__file__), "../../local_files")
+os.makedirs(_local_files_dir, exist_ok=True)
+app.mount("/files", StaticFiles(directory=_local_files_dir), name="local_files")
 
 @app.get("/health", tags=["Health"])
 async def health_check():

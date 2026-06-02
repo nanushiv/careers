@@ -10,6 +10,7 @@ import logging
 
 from app.core.security import get_current_user
 from app.core.database import supabase
+from app.core.config import is_admin
 from app.services.outreach.generator import outreach_service
 
 logger = logging.getLogger(__name__)
@@ -53,7 +54,7 @@ def get_user(current_user):
 
 
 def require_pro(user: dict):
-    if user.get("plan", "free") == "free":
+    if user.get("plan", "free") == "free" and not is_admin(user.get("email", "")):
         raise HTTPException(
             status_code=402,
             detail={
@@ -116,7 +117,7 @@ async def bulk_generate(
 
     latest_analysis = supabase.table("resume_analyses").select(
         "strengths"
-    ).eq("user_id", user["id"]).order("created_at", desc=True).limit(1).execute()
+    ).eq("user_id", user["id"]).eq("analysis_type", "ats").order("created_at", desc=True).limit(1).execute()
 
     strengths = []
     if latest_analysis.data:
