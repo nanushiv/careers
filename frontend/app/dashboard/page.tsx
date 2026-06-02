@@ -24,6 +24,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [latestAnalysis, setLatestAnalysis] = useState<any>(null);
+  const [insights, setInsights] = useState<any[]>([]);
+  const [generatingInsights, setGeneratingInsights] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -35,7 +37,10 @@ export default function DashboardPage() {
         api.listAnalyses(token, { analysis_type: "ats" }),
       ]);
         if (analysisResp.data?.[0]) setLatestAnalysis(analysisResp.data[0]);
-        if (resp.data) setData(resp.data);
+        if (resp.data) {
+          setData(resp.data);
+          setInsights(resp.data.insights ?? []);
+        }
       } catch (e) {
         setError("Failed to load dashboard");
         console.error(e);
@@ -49,7 +54,33 @@ export default function DashboardPage() {
   if (loading) return <DashboardSkeleton />;
   if (error || !data) return <ErrorState message={error || "No data"} />;
 
-  const { career_health_score, pipeline_summary, insights, follow_ups, resumes, recent_applications } = data;
+  const { career_health_score, pipeline_summary, follow_ups, resumes, recent_applications } = data;
+
+  const handleGenerateInsights = async () => {
+    setGeneratingInsights(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      await api.generateInsights(token);
+      // Poll for new insights
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        const resp = await api.listInsights(token);
+        if (resp.data && resp.data.length > 0) {
+          setInsights(resp.data);
+          setGeneratingInsights(false);
+          clearInterval(poll);
+        }
+        if (attempts >= 10) {
+          setGeneratingInsights(false);
+          clearInterval(poll);
+        }
+      }, 3000);
+    } catch {
+      setGeneratingInsights(false);
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -139,7 +170,7 @@ export default function DashboardPage() {
             </Link>
           </div>
           {insights.length === 0 ? (
-            <EmptyInsights hasAnalysis={!!latestAnalysis} />
+            <EmptyInsights hasAnalysis={!!latestAnalysis} onGenerate={handleGenerateInsights} generating={generatingInsights} />
           ) : (
             insights.map((insight, i) => (
               <motion.div
@@ -230,16 +261,24 @@ function StatCard({
   );
 }
 
-function EmptyInsights({ hasAnalysis }: { hasAnalysis: boolean }) {
+function EmptyInsights({ hasAnalysis, onGenerate, generating }: { hasAnalysis: boolean; onGenerate: () => void; generating: boolean }) {
   return (
     <div className="bg-gray-900 border border-gray-800 border-dashed rounded-xl p-8 text-center">
-      <Brain className="w-8 h-8 text-gray-600 mx-auto mb-3" />
+      <Brain className={`w-8 h-8 mx-auto mb-3 ${generating ? "text-violet-500 animate-pulse" : "text-gray-600"}`} />
       {hasAnalysis ? (
         <>
           <p className="text-sm text-gray-400">
-            AI insights are generated weekly based on your job search activity.
+            {generating ? "Generating your AI insights..." : "No insights yet — generate them now based on your applications."}
           </p>
-          <p className="text-xs text-gray-600 mt-1">Check back soon — your first insights will appear here.</p>
+          {!generating && (
+            <button
+              onClick={onGenerate}
+              className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              <Brain className="w-4 h-4" />
+              Generate Insights
+            </button>
+          )}
         </>
       ) : (
         <>

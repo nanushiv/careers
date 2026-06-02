@@ -24,6 +24,7 @@ export default function ApplicationsPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [search, setSearch] = useState("");
+  const [dragOverStage, setDragOverStage] = useState<string | null>(null);
 
   const load = async () => {
     const token = await getToken();
@@ -53,6 +54,14 @@ export default function ApplicationsPage() {
   const handleAppAdded = (app: Application) => {
     setApplications((prev) => [app, ...prev]);
     setShowAddModal(false);
+  };
+
+  const handleStageChange = async (id: string, newStage: string) => {
+    // Optimistic update
+    setApplications((prev) => prev.map((a) => a.id === id ? { ...a, stage: newStage } : a));
+    const token = await getToken();
+    if (!token) return;
+    await api.updateApplication(token, id, { stage: newStage });
   };
 
   if (loading) return <ApplicationsSkeleton />;
@@ -107,11 +116,22 @@ export default function ApplicationsPage() {
 
       {/* ── Kanban Board ──────────────────────────────────────────── */}
       {view === "kanban" && (
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-thin">
           {KANBAN_STAGES.map((stage) => {
             const stageApps = getStageApps(stage.id);
             return (
-              <div key={stage.id} className="shrink-0 w-72">
+              <div
+                key={stage.id}
+                className={`shrink-0 w-52 rounded-xl transition-colors ${dragOverStage === stage.id ? "bg-violet-500/10 ring-1 ring-violet-500/40" : ""}`}
+                onDragOver={(e) => { e.preventDefault(); setDragOverStage(stage.id); }}
+                onDragLeave={() => setDragOverStage(null)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const id = e.dataTransfer.getData("applicationId");
+                  if (id) handleStageChange(id, stage.id);
+                  setDragOverStage(null);
+                }}
+              >
                 {/* Column header */}
                 <div className={`flex items-center justify-between mb-3 pb-2 border-b-2 ${stage.color}`}>
                   <span className="text-sm font-semibold text-gray-200">{stage.label}</span>
@@ -123,12 +143,12 @@ export default function ApplicationsPage() {
                 {/* Cards */}
                 <div className="space-y-3">
                   {stageApps.length === 0 ? (
-                    <div className="h-24 border-2 border-dashed border-gray-800 rounded-xl flex items-center justify-center">
-                      <span className="text-xs text-gray-600">No applications</span>
+                    <div className="h-16 border border-dashed border-gray-800/60 rounded-xl flex items-center justify-center opacity-40">
+                      <span className="text-xs text-gray-600">Empty</span>
                     </div>
                   ) : (
                     stageApps.map((app) => (
-                      <ApplicationCard key={app.id} application={app} compact />
+                      <ApplicationCard key={app.id} application={app} compact onStageChange={handleStageChange} />
                     ))
                   )}
                 </div>
@@ -137,7 +157,7 @@ export default function ApplicationsPage() {
           })}
 
           {/* Graveyard */}
-          <div className="shrink-0 w-64 opacity-60">
+          <div className="shrink-0 w-44 opacity-60">
             <div className="flex items-center justify-between mb-3 pb-2 border-b-2 border-gray-700">
               <span className="text-sm font-medium text-gray-400">Closed</span>
               <span className="text-xs text-gray-600 bg-gray-900 px-2 py-0.5 rounded-full">
@@ -149,7 +169,7 @@ export default function ApplicationsPage() {
                 .filter(a => ["rejected", "ghosted", "withdrawn"].includes(a.stage))
                 .slice(0, 5)
                 .map((app) => (
-                  <ApplicationCard key={app.id} application={app} compact />
+                  <ApplicationCard key={app.id} application={app} compact onStageChange={handleStageChange} />
                 ))}
             </div>
           </div>
@@ -160,7 +180,7 @@ export default function ApplicationsPage() {
       {view === "list" && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filteredApps.map((app) => (
-            <ApplicationCard key={app.id} application={app} />
+            <ApplicationCard key={app.id} application={app} onStageChange={handleStageChange} />
           ))}
         </div>
       )}

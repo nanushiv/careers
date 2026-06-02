@@ -1,12 +1,13 @@
 """
 Insights API — retrieve, dismiss, and act on AI insights.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from typing import Optional
 import logging
 
 from app.core.security import get_current_user
 from app.core.database import supabase
+from app.services.insights.insight_engine import insight_engine
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -54,6 +55,17 @@ async def get_insight(insight_id: str, current_user: dict = Depends(get_current_
     if not resp.data:
         raise HTTPException(status_code=404, detail="Insight not found")
     return api_response(data=resp.data[0])
+
+
+@router.post("/generate")
+async def generate_insights(
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
+):
+    """Trigger on-demand insight generation for the current user."""
+    user_id = get_user_id(current_user)
+    background_tasks.add_task(insight_engine.generate_weekly_insights, user_id)
+    return api_response(data={"status": "generating", "message": "Insights are being generated. Refresh in a few seconds."})
 
 
 @router.post("/{insight_id}/dismiss")

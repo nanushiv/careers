@@ -1,6 +1,7 @@
 "use client";
 
-import { Building2, Calendar, Star } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Building2, Calendar, Star, ChevronDown } from "lucide-react";
 import { Application } from "@/lib/api";
 import { formatDistanceToNow } from "date-fns";
 
@@ -27,14 +28,32 @@ const SOURCE_LABELS: Record<string, string> = {
   unknown: "Unknown",
 };
 
+const ALL_STAGES = [
+  "applied", "screening", "phone_screen", "technical",
+  "case_study", "final", "offer", "rejected", "ghosted", "withdrawn",
+];
+
 interface ApplicationCardProps {
   application: Application;
   compact?: boolean;
   onClick?: () => void;
+  onStageChange?: (id: string, newStage: string) => void;
 }
 
-export function ApplicationCard({ application, compact = false, onClick }: ApplicationCardProps) {
+export function ApplicationCard({ application, compact = false, onClick, onStageChange }: ApplicationCardProps) {
   const stage = STAGE_CONFIG[application.stage] || STAGE_CONFIG.applied;
+  const [showStageMenu, setShowStageMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowStageMenu(false);
+      }
+    };
+    if (showStageMenu) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showStageMenu]);
 
   const appliedDate = application.applied_date
     ? formatDistanceToNow(new Date(application.applied_date), { addSuffix: true })
@@ -42,7 +61,12 @@ export function ApplicationCard({ application, compact = false, onClick }: Appli
 
   return (
     <div
-      className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-700 hover:bg-gray-850 transition-all cursor-pointer group"
+      className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-700 transition-all group cursor-grab active:cursor-grabbing active:opacity-50 active:scale-95"
+      draggable={!!onStageChange}
+      onDragStart={(e) => {
+        e.dataTransfer.setData("applicationId", application.id);
+        e.dataTransfer.effectAllowed = "move";
+      }}
       onClick={onClick}
     >
         {/* Header */}
@@ -61,11 +85,36 @@ export function ApplicationCard({ application, compact = false, onClick }: Appli
           </div>
         </div>
 
-        {/* Stage badge */}
+        {/* Stage badge — click to change stage */}
         <div className="flex items-center justify-between">
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${stage.color}`}>
-            {stage.label}
-          </span>
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={(e) => { e.stopPropagation(); if (onStageChange) setShowStageMenu(v => !v); }}
+              className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium transition-opacity ${stage.color} ${onStageChange ? "hover:opacity-80" : ""}`}
+            >
+              {stage.label}
+              {onStageChange && <ChevronDown className="w-3 h-3 opacity-60" />}
+            </button>
+            {showStageMenu && (
+              <div className="absolute top-full left-0 mt-1 z-50 bg-gray-800 border border-gray-700 rounded-xl shadow-xl py-1 min-w-[160px]">
+                {ALL_STAGES.map((s) => (
+                  <button
+                    key={s}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onStageChange!(application.id, s);
+                      setShowStageMenu(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-700 transition-colors ${
+                      s === application.stage ? "text-violet-400 font-semibold" : "text-gray-300"
+                    }`}
+                  >
+                    {STAGE_CONFIG[s]?.label || s}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {!compact && application.role_fit_score && (
             <span className="text-xs text-gray-400">

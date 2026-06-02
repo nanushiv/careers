@@ -362,4 +362,8 @@ export const api = {
   async dismissInsight(token: string, id: string) {
     return fetchApi<Insight>(`/insights/${id}/dismiss`, { method: "POST" }, token);
   },
+
+  async generateInsights(token: string) {
+    return fetchApi<{ status: string; message: string }>("/insights/generate", { method: "POST" }, token);
+  },
 };

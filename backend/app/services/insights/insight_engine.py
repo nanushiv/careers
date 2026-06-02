@@ -18,9 +18,10 @@ class InsightEngine:
     async def generate_weekly_insights(self, user_id: str) -> list[dict]:
         """Generate strategic insights for a user based on their data."""
         # Gather all data
-        user = supabase.table("users").select("*").eq("id", user_id).single().execute().data
-        if not user:
+        user_resp = supabase.table("users").select("*").eq("id", user_id).limit(1).execute()
+        if not user_resp.data:
             return []
+        user = user_resp.data[0]
 
         apps = supabase.table("applications").select("*").eq(
             "user_id", user_id
@@ -137,6 +138,60 @@ class InsightEngine:
                 "impact": "Consistent velocity keeps your pipeline alive and generates more data for AI optimization.",
             })
 
+        # ── Offer detected ─────────────────────────────────────────────────
+        offers = [a for a in apps if a["stage"] == "offer"]
+        if offers:
+            co = offers[0]["company_name"]
+            insights.append({
+                "insight_type": "stage_drop_off",
+                "priority": "critical",
+                "title": f"You have an offer from {co} — time to negotiate",
+                "summary": f"Congratulations! {co} extended an offer. First offers are rarely the best offers.",
+                "detail": "Studies show 85% of hiring managers expect candidates to negotiate. The average first offer is 5-10% below the top of the band. Use competing offers or interviews in your pipeline as leverage.",
+                "action": "Research salary bands on Levels.fyi / Glassdoor. Counter at least 10% above the offer. Mention your other active processes.",
+                "impact": "A successful negotiation typically adds $10K–$30K in year-1 comp.",
+            })
+
+        # ── Final-round momentum ───────────────────────────────────────────
+        finals = [a for a in apps if a["stage"] == "final"]
+        if finals:
+            companies = ", ".join(a["company_name"] for a in finals[:3])
+            insights.append({
+                "insight_type": "stage_drop_off",
+                "priority": "high",
+                "title": f"Final-round interviews active at {companies}",
+                "summary": f"You're in the final stage at {len(finals)} company{'s' if len(finals) > 1 else ''}. This is where preparation pays off.",
+                "detail": "Final rounds typically include cross-functional interviews, executive conversations, and case presentations. Candidates who research the company's recent priorities and current business context score significantly higher.",
+                "action": "Review the company's latest earnings, product launches, and press releases. Prepare 2-3 strategic questions for each interviewer.",
+                "impact": "Thorough final-round prep increases offer rates by ~40%.",
+            })
+
+        # ── Dream role in pipeline ─────────────────────────────────────────
+        dream_active = [a for a in apps if a.get("is_dream_role") and a["stage"] not in ("rejected", "ghosted", "withdrawn")]
+        if dream_active and not finals:  # Don't double-show if already in finals insight
+            co_list = ", ".join(a["company_name"] for a in dream_active[:2])
+            insights.append({
+                "insight_type": "role_fit_trend",
+                "priority": "high",
+                "title": f"Dream role active at {co_list} — prioritize these",
+                "summary": f"You have {len(dream_active)} dream-role application(s) still in play. Treat these as top priority.",
+                "detail": "Dream roles rarely open twice. Follow up proactively, tailor your materials specifically to these companies, and keep your pipeline active to maintain negotiating leverage.",
+                "action": f"Send a thoughtful follow-up to {dream_active[0]['company_name']} referencing something specific about their mission or recent news.",
+                "impact": "Proactive follow-ups increase response rates by 30% and signal strong interest.",
+            })
+
+        # ── Strong callback rate positive signal ───────────────────────────
+        if total >= 5 and callback_rate >= 40:
+            insights.append({
+                "insight_type": "callback_pattern",
+                "priority": "medium",
+                "title": f"Strong {callback_rate:.0f}% callback rate — your resume is working",
+                "summary": "Your current resume and targeting strategy is resonating. Now focus on converting interviews to offers.",
+                "detail": "A callback rate above 40% puts you in the top quartile of job seekers. The bottleneck has shifted from resume quality to interview performance.",
+                "action": "Run through STAR-format answers for your top 5 behavioral questions. Consider a mock interview session.",
+                "impact": "Interview preparation is now the highest-leverage activity in your search.",
+            })
+
         return insights
 
     async def _generate_llm_insights(self, user: dict, apps: list, recent_insights: list) -> list[dict]:
@@ -160,7 +215,7 @@ class InsightEngine:
                 previous_insight_titles=", ".join([r["title"] for r in recent_insights[:5]]),
             )
 
-            resp = await llm_client.complete(prompt, model="gemini-1.5-flash", max_tokens=1500)
+            resp = await llm_client.complete(prompt, model="gemini-2.5-flash-lite", max_tokens=1500)
             data = resp.as_json()
 
             return [
