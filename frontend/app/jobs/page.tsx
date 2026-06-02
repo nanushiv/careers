@@ -96,10 +96,18 @@ export default function JobsPage() {
         )}
       </div>
 
+      {/* Loading state (shown regardless of plan) */}
+      {loading && (
+        <div className="flex flex-col items-center justify-center py-24 gap-3">
+          <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
+          <p className="text-sm text-gray-400">Finding matching roles for your profile...</p>
+        </div>
+      )}
+
       {/* Pro gate */}
       {!isPro && !loading && <ProGate />}
 
-      {isPro && (
+      {isPro && !loading && (
         <>
           {/* Filters */}
           <div className="flex items-center gap-3 mb-5 flex-wrap">
@@ -136,11 +144,7 @@ export default function JobsPage() {
           </div>
 
           {/* Job list */}
-          {loading ? (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
-            </div>
-          ) : apiError ? (
+          {apiError ? (
             <div className="text-center py-16 bg-gray-900 border border-red-500/20 border-dashed rounded-2xl">
               <Briefcase className="w-10 h-10 text-red-400 mx-auto mb-3" />
               <p className="text-gray-300 font-medium mb-1">Could not load jobs</p>
