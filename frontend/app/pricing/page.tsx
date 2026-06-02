@@ -33,15 +33,6 @@ export default function PricingPage() {
   const { getToken, isSignedIn } = useAuth();
   const [loading, setLoading] = useState(false);
   const [userPlan, setUserPlan] = useState<string>("free");
-  const [priceDisplay, setPriceDisplay] = useState<string>("$29");
-
-  useEffect(() => {
-    // Instant locale-based detection (no API needed)
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (tz === "Asia/Kolkata" || tz === "Asia/Calcutta") {
-      setPriceDisplay("₹999");
-    }
-  }, []);
 
   useEffect(() => {
     const fetchPlan = async () => {
@@ -140,7 +131,7 @@ export default function PricingPage() {
           </div>
           <p className="text-sm font-semibold text-violet-400 uppercase tracking-wider">Pro</p>
           <div className="mt-3 mb-6">
-            <span className="text-4xl font-bold text-white">{priceDisplay}</span>
+            <span className="text-4xl font-bold text-white">₹999</span>
             <span className="text-gray-400 ml-1">/month</span>
           </div>
           <ul className="space-y-3 mb-8">

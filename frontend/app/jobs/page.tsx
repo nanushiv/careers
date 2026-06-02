@@ -26,11 +26,13 @@ export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [isPro, setIsPro] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
   const [location, setLocation] = useState("Remote");
   const [filter, setFilter] = useState<"all" | "high" | "remote">("all");
 
   const load = async (loc = location) => {
     setLoading(true);
+    setApiError(null);
     try {
       const token = await getToken();
       if (!token) return;
@@ -43,12 +45,19 @@ export default function JobsPage() {
 
       if (resp.status === 402) {
         setIsPro(false);
-      } else if (data.success) {
-        setJobs(data.data.jobs || []);
+      } else {
+        // Any non-402 response = user has access
         setIsPro(true);
+        if (data.success) {
+          setJobs(data.data.jobs || []);
+        } else {
+          setApiError(data.detail || data.error?.message || "Something went wrong. Try again.");
+        }
       }
     } catch (e) {
       console.error(e);
+      setIsPro(true); // Don't show paywall on network errors
+      setApiError("Failed to load jobs. Check your connection.");
     } finally {
       setLoading(false);
     }
@@ -130,6 +139,15 @@ export default function JobsPage() {
           {loading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
+            </div>
+          ) : apiError ? (
+            <div className="text-center py-16 bg-gray-900 border border-red-500/20 border-dashed rounded-2xl">
+              <Briefcase className="w-10 h-10 text-red-400 mx-auto mb-3" />
+              <p className="text-gray-300 font-medium mb-1">Could not load jobs</p>
+              <p className="text-sm text-gray-500 mb-4">{apiError}</p>
+              <button onClick={() => load(location)} className="px-4 py-2 bg-gray-800 text-gray-300 text-sm rounded-lg border border-gray-700 hover:bg-gray-700 transition-colors">
+                Try again
+              </button>
             </div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-16 bg-gray-900 border border-gray-800 border-dashed rounded-2xl">
@@ -239,7 +257,7 @@ function ProGate() {
       </div>
       <Link href="/pricing"
         className="inline-flex items-center gap-2 px-6 py-3 bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-xl transition-colors">
-        Upgrade to Pro — $29/mo
+        Upgrade to Pro — ₹999/mo
       </Link>
     </div>
   );
