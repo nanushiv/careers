@@ -157,7 +157,17 @@ export default function ApplicationsPage() {
           })}
 
           {/* Graveyard */}
-          <div className="shrink-0 w-44 opacity-60">
+          <div
+            className={`shrink-0 w-44 transition-colors ${dragOverStage === "rejected" ? "opacity-100 bg-red-500/10 ring-1 ring-red-500/40 rounded-xl" : "opacity-60"}`}
+            onDragOver={(e) => { e.preventDefault(); setDragOverStage("rejected"); }}
+            onDragLeave={() => setDragOverStage(null)}
+            onDrop={(e) => {
+              e.preventDefault();
+              const id = e.dataTransfer.getData("applicationId");
+              if (id) handleStageChange(id, "rejected");
+              setDragOverStage(null);
+            }}
+          >
             <div className="flex items-center justify-between mb-3 pb-2 border-b-2 border-gray-700">
               <span className="text-sm font-medium text-gray-400">Closed</span>
               <span className="text-xs text-gray-600 bg-gray-900 px-2 py-0.5 rounded-full">
