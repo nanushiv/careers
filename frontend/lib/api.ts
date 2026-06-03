@@ -25,6 +25,7 @@ export interface User {
   target_roles: string[];
   career_health_score?: number;
   onboarding_completed: boolean;
+  onboarding_step?: number;
 }
 
 export interface Resume {
