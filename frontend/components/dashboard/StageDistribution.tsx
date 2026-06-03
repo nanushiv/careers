@@ -20,11 +20,7 @@ export function StageDistribution({ distribution }: { distribution: Record<strin
     <div className="space-y-2.5">
       {Object.entries(distribution).map(([stage, count]) => (
         <div key={stage} className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full shrink-0" style={{
-            backgroundColor: STAGE_COLORS[stage] ? undefined : "#6b7280",
-          }}
-            className={`w-2 h-2 rounded-full shrink-0 ${STAGE_COLORS[stage] || "bg-gray-600"}`}
-          />
+          <div className={`w-2 h-2 rounded-full shrink-0 ${STAGE_COLORS[stage] || "bg-gray-600"}`} />
           <span className="text-xs text-gray-400 capitalize flex-1">
             {stage.replace(/_/g, " ")}
           </span>

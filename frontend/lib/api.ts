@@ -55,6 +55,10 @@ export interface Analysis {
   recruiter_signals?: RecruiterSignals;
   improvement_roadmap: RoadmapItem[];
   interview_questions: InterviewQuestion[];
+  ats_red_flags?: string[];
+  keyword_score?: number;
+  format_score?: number;
+  experience_score?: number;
   model_used?: string;
   cache_hit: boolean;
   created_at: string;

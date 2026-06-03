@@ -38,7 +38,7 @@ export function AddApplicationModal({ onClose, onAdded }: AddApplicationModalPro
     referral_contact: "",
     notes: "",
     is_dream_role: false,
-    priority: "medium",
+    priority: "medium" as "low" | "medium" | "high",
     expected_salary_min: "",
     expected_salary_max: "",
   });
