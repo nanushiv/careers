@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     STRIPE_PRO_PRICE_ID: str = ""        # USD $29/month (global)
     STRIPE_PRO_PRICE_ID_IN: str = ""     # INR ₹999/month (India)
 
+    # Job sources
+    ADZUNA_APP_ID: str = ""
+    ADZUNA_APP_KEY: str = ""
+
     # Admin
     ADMIN_EMAILS: str = "shivani27chaudhary@gmail.com"
     BYPASS_PRO_GATE: bool = False
