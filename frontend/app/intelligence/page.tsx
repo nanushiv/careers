@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { Brain, TrendingUp, Zap, Lock, RefreshCw } from "lucide-react";
+import { Brain, TrendingUp, Zap, Lock, RefreshCw, ArrowRight } from "lucide-react";
+import Link from "next/link";
 import { api, Insight, Analysis } from "@/lib/api";
 import { InsightCard } from "@/components/dashboard/InsightCard";
 import { RecruiterPerceptionPanel } from "@/components/analysis/RecruiterPerceptionPanel";
@@ -124,9 +125,19 @@ function EmptyInsights() {
     <div className="text-center py-16 bg-gray-900 border border-gray-800 border-dashed rounded-2xl">
       <Brain className="w-10 h-10 text-gray-600 mx-auto mb-3" />
       <p className="text-gray-400 font-medium">No insights yet</p>
-      <p className="text-sm text-gray-500 mt-1">
-        Upload a resume and log 5+ applications to unlock AI-powered strategic insights.
+      <p className="text-sm text-gray-500 mt-1 max-w-sm mx-auto">
+        Upload a resume, run an AI analysis, and log 3+ applications to unlock strategic insights.
       </p>
+      <div className="flex items-center justify-center gap-3 mt-5">
+        <Link href="/resume"
+          className="inline-flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-colors">
+          <ArrowRight className="w-3.5 h-3.5" /> Analyze Resume
+        </Link>
+        <Link href="/applications?action=add"
+          className="inline-flex items-center gap-1.5 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-medium rounded-lg border border-gray-700 transition-colors">
+          Log Applications
+        </Link>
+      </div>
     </div>
   );
 }
@@ -136,9 +147,13 @@ function EmptyRecruiter() {
     <div className="text-center py-16 bg-gray-900 border border-gray-800 border-dashed rounded-2xl">
       <Lock className="w-10 h-10 text-gray-600 mx-auto mb-3" />
       <p className="text-gray-400 font-medium">No recruiter analysis yet</p>
-      <p className="text-sm text-gray-500 mt-1">
-        Run an analysis from Resume Vault and include "Recruiter Perception" to see how recruiters view your profile.
+      <p className="text-sm text-gray-500 mt-1 max-w-sm mx-auto">
+        Run a "Recruiter Perception" analysis from Resume Vault to see how recruiters view your profile.
       </p>
+      <Link href="/resume"
+        className="mt-5 inline-flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-colors">
+        <ArrowRight className="w-3.5 h-3.5" /> Go to Resume Vault
+      </Link>
     </div>
   );
 }

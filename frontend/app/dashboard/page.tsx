@@ -5,7 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import { motion } from "framer-motion";
 import {
   TrendingUp, AlertCircle, CheckCircle2, Clock,
-  ArrowRight, Plus, Briefcase, FileText, Brain
+  ArrowRight, Plus, Briefcase, FileText, Brain, Sparkles
 } from "lucide-react";
 import Link from "next/link";
 import { api, DashboardData } from "@/lib/api";
@@ -27,6 +27,7 @@ export default function DashboardPage() {
   const [latestAnalysis, setLatestAnalysis] = useState<any>(null);
   const [insights, setInsights] = useState<any[]>([]);
   const [generatingInsights, setGeneratingInsights] = useState(false);
+  const [insightsTakingLong, setInsightsTakingLong] = useState(false);
 
   const load = async (isRetry = false) => {
     try {
@@ -59,6 +60,8 @@ export default function DashboardPage() {
 
   const { career_health_score, pipeline_summary, follow_ups, resumes, recent_applications } = data;
 
+  const isNewUser = (resumes?.length ?? 0) === 0 && recent_applications.length === 0;
+
   const handleGenerateInsights = async () => {
     setGeneratingInsights(true);
     try {
@@ -69,14 +72,17 @@ export default function DashboardPage() {
       let attempts = 0;
       const poll = setInterval(async () => {
         attempts++;
+        if (attempts === 5) setInsightsTakingLong(true);
         const resp = await api.listInsights(token);
         if (resp.data && resp.data.length > 0) {
           setInsights(resp.data);
           setGeneratingInsights(false);
+          setInsightsTakingLong(false);
           clearInterval(poll);
         }
-        if (attempts >= 10) {
+        if (attempts >= 15) {
           setGeneratingInsights(false);
+          setInsightsTakingLong(false);
           clearInterval(poll);
         }
       }, 3000);
@@ -87,7 +93,8 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      {latestAnalysis && (
+      {isNewUser && <GettingStartedBanner />}
+      {!isNewUser && latestAnalysis && (
         <ResumeNudgeBanner
           score={latestAnalysis.overall_score ?? 0}
           topGaps={(latestAnalysis.gaps ?? []).map((g: any) => g.description).filter(Boolean)}
@@ -173,7 +180,7 @@ export default function DashboardPage() {
             </Link>
           </div>
           {insights.length === 0 ? (
-            <EmptyInsights hasAnalysis={!!latestAnalysis} onGenerate={handleGenerateInsights} generating={generatingInsights} />
+            <EmptyInsights hasAnalysis={!!latestAnalysis} onGenerate={handleGenerateInsights} generating={generatingInsights} takingLong={insightsTakingLong} />
           ) : (
             insights.map((insight, i) => (
               <motion.div
@@ -264,15 +271,48 @@ function StatCard({
   );
 }
 
-function EmptyInsights({ hasAnalysis, onGenerate, generating }: { hasAnalysis: boolean; onGenerate: () => void; generating: boolean }) {
+function GettingStartedBanner() {
+  const steps = [
+    { num: 1, label: "Upload your resume", href: "/resume", cta: "Go to Resume Vault" },
+    { num: 2, label: "Run AI analysis to get your ATS score", href: "/resume", cta: "Run Analysis" },
+    { num: 3, label: "Log your first job application", href: "/applications?action=add", cta: "Add Application" },
+  ];
+  return (
+    <div className="bg-gradient-to-r from-violet-950/40 to-blue-950/30 border border-violet-500/20 rounded-xl p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <Sparkles className="w-5 h-5 text-violet-400" />
+        <p className="font-semibold text-white">Welcome to CareerOS — let&apos;s get you set up</p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {steps.map(s => (
+          <Link key={s.num} href={s.href}
+            className="flex items-center gap-3 p-3 bg-gray-900/60 border border-gray-700 rounded-lg hover:border-violet-500/40 transition-all group">
+            <div className="w-7 h-7 rounded-full bg-violet-600/20 border border-violet-500/30 flex items-center justify-center shrink-0 text-xs font-bold text-violet-400">
+              {s.num}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-gray-300 leading-tight">{s.label}</p>
+              <p className="text-xs text-violet-400 mt-0.5 group-hover:text-violet-300">{s.cta} →</p>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EmptyInsights({ hasAnalysis, onGenerate, generating, takingLong }: { hasAnalysis: boolean; onGenerate: () => void; generating: boolean; takingLong?: boolean }) {
   return (
     <div className="bg-gray-900 border border-gray-800 border-dashed rounded-xl p-8 text-center">
       <Brain className={`w-8 h-8 mx-auto mb-3 ${generating ? "text-violet-500 animate-pulse" : "text-gray-600"}`} />
       {hasAnalysis ? (
         <>
           <p className="text-sm text-gray-400">
-            {generating ? "Generating your AI insights..." : "No insights yet — generate them now based on your applications."}
+            {generating ? "Generating your AI insights…" : "No insights yet — generate them now based on your applications."}
           </p>
+          {generating && takingLong && (
+            <p className="text-xs text-gray-500 mt-1">Taking longer than expected — almost there…</p>
+          )}
           {!generating && (
             <button
               onClick={onGenerate}

@@ -48,10 +48,16 @@ export default function OnboardingPage() {
     try {
       const token = await getToken();
       if (!token) { setError("Not authenticated — try refreshing"); return; }
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { years_experience, ...rest } = form;
+      const yearsMap: Record<string, number> = {
+        "0-2 years": 1, "3-5 years": 4, "6-9 years": 7, "10+ years": 12
+      };
       await api.updateMe(token, {
-        ...rest,
+        full_name: form.full_name,
+        current_title: form.current_title,
+        current_company: form.current_company,
+        location: form.location,
+        target_roles: form.target_roles,
+        years_experience: yearsMap[form.years_experience] ?? 0,
         onboarding_completed: true,
         onboarding_step: 3,
       });

@@ -21,6 +21,10 @@ export interface User {
   clerk_id: string;
   email: string;
   full_name?: string;
+  current_title?: string;
+  current_company?: string;
+  location?: string;
+  years_experience?: number;
   plan: "free" | "pro" | "team";
   target_roles: string[];
   career_health_score?: number;
