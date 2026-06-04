@@ -98,6 +98,9 @@ async def generate_outreach_email(
         context=request.context or "",
         user_id=user["id"],
         user_plan=user.get("plan", "free"),
+        sender_email=user.get("email", ""),
+        sender_linkedin=user.get("linkedin_url", ""),
+        sender_phone=user.get("phone", ""),
     )
 
     return api_response(data=result.to_dict())
@@ -129,6 +132,9 @@ async def bulk_generate(
         "current_role": user.get("current_title", ""),
         "target_role": (user.get("target_roles") or ["Product Manager"])[0],
         "key_strengths": strengths,
+        "email": user.get("email", ""),
+        "linkedin_url": user.get("linkedin_url", ""),
+        "phone": user.get("phone", ""),
     }
 
     results = await outreach_service.generate_bulk(

@@ -27,6 +27,7 @@ export default function SettingsPage() {
     current_company: "",
     location: "",
     linkedin_url: "",
+    phone: "",
     target_roles: [] as string[],
     years_experience: 0,
   });
@@ -44,6 +45,7 @@ export default function SettingsPage() {
           current_company: (resp.data as any).current_company || "",
           location: (resp.data as any).location || "",
           linkedin_url: (resp.data as any).linkedin_url || "",
+          phone: (resp.data as any).phone || "",
           target_roles: resp.data.target_roles || [],
           years_experience: (resp.data as any).years_experience || 0,
         });
@@ -116,10 +118,16 @@ export default function SettingsPage() {
                 placeholder="e.g. Hyderabad" className={input} />
             </Field>
           </Row>
-          <Field label="LinkedIn URL">
-            <input value={form.linkedin_url} onChange={e => set("linkedin_url", e.target.value)}
-              placeholder="https://linkedin.com/in/yourprofile" className={input} />
-          </Field>
+          <Row>
+            <Field label="LinkedIn URL">
+              <input value={form.linkedin_url} onChange={e => set("linkedin_url", e.target.value)}
+                placeholder="https://linkedin.com/in/yourprofile" className={input} />
+            </Field>
+            <Field label="Phone">
+              <input value={form.phone} onChange={e => set("phone", e.target.value)}
+                placeholder="+91 98765 43210" className={input} />
+            </Field>
+          </Row>
           <Field label="Years of Experience">
             <input type="number" value={form.years_experience}
               onChange={e => set("years_experience", parseInt(e.target.value) || 0)}

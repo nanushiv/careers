@@ -23,36 +23,39 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
   const [latestAnalysis, setLatestAnalysis] = useState<any>(null);
   const [insights, setInsights] = useState<any[]>([]);
   const [generatingInsights, setGeneratingInsights] = useState(false);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const token = await getToken();
-        if (!token) return;
-        const [resp, analysisResp] = await Promise.all([
+  const load = async (isRetry = false) => {
+    try {
+      if (isRetry) setRetrying(true);
+      const token = await getToken();
+      if (!token) return;
+      const [resp, analysisResp] = await Promise.all([
         api.getDashboard(token),
         api.listAnalyses(token, { analysis_type: "ats" }),
       ]);
-        if (analysisResp.data?.[0]) setLatestAnalysis(analysisResp.data[0]);
-        if (resp.data) {
-          setData(resp.data);
-          setInsights(resp.data.insights ?? []);
-        }
-      } catch (e) {
-        setError("Failed to load dashboard");
-        console.error(e);
-      } finally {
-        setLoading(false);
+      if (analysisResp.data?.[0]) setLatestAnalysis(analysisResp.data[0]);
+      if (resp.data) {
+        setData(resp.data);
+        setInsights(resp.data.insights ?? []);
+        setError(null);
       }
-    };
-    load();
-  }, [getToken]);
+    } catch (e) {
+      setError("Failed to load dashboard");
+      console.error(e);
+    } finally {
+      setLoading(false);
+      setRetrying(false);
+    }
+  };
+
+  useEffect(() => { load(); }, [getToken]);
 
   if (loading) return <DashboardSkeleton />;
-  if (error || !data) return <ErrorState message={error || "No data"} />;
+  if (error || !data) return <ErrorState message={error || "No data"} onRetry={() => load(true)} retrying={retrying} />;
 
   const { career_health_score, pipeline_summary, follow_ups, resumes, recent_applications } = data;
 
@@ -331,12 +334,20 @@ function DashboardSkeleton() {
   );
 }
 
-function ErrorState({ message }: { message: string }) {
+function ErrorState({ message, onRetry, retrying }: { message: string; onRetry: () => void; retrying: boolean }) {
   return (
     <div className="flex items-center justify-center h-64">
       <div className="text-center">
         <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
-        <p className="text-gray-400">{message}</p>
+        <p className="text-gray-400 mb-1">{message}</p>
+        <p className="text-xs text-gray-600 mb-4">The server may be waking up — this can take ~30 seconds.</p>
+        <button
+          onClick={onRetry}
+          disabled={retrying}
+          className="px-4 py-2 text-sm bg-violet-600 hover:bg-violet-500 text-white rounded-lg transition-colors disabled:opacity-50"
+        >
+          {retrying ? "Retrying..." : "Retry"}
+        </button>
       </div>
     </div>
   );

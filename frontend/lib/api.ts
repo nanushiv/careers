@@ -26,6 +26,7 @@ export interface User {
   career_health_score?: number;
   onboarding_completed: boolean;
   onboarding_step?: number;
+  phone?: string;
 }
 
 export interface Resume {

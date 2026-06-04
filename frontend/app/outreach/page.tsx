@@ -461,7 +461,11 @@ export default function OutreachPage() {
                       : <><Copy className="w-3 h-3" /> Copy</>}
                   </button>
                   <a
-                    href={`mailto:${result.recipient.email || ""}?subject=${encodeURIComponent(result.email.subject)}&body=${encodeURIComponent(result.email.body)}${senderEmail ? `&bcc=${encodeURIComponent(senderEmail)}` : ""}`}
+                    href={result.recipient.email
+                      ? `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(result.recipient.email)}&su=${encodeURIComponent(result.email.subject)}&body=${encodeURIComponent(result.email.body)}`
+                      : "#"}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                       result.recipient.email
                         ? "bg-violet-600 hover:bg-violet-500 text-white"
@@ -470,7 +474,7 @@ export default function OutreachPage() {
                     title={result.recipient.email ? undefined : "Add their email address to enable sending"}
                     onClick={e => { if (!result.recipient.email) e.preventDefault(); }}>
                     <Send className="w-3 h-3" />
-                    {result.recipient.email ? "Open in Mail" : "Add email to send"}
+                    {result.recipient.email ? "Open in Gmail" : "Add email to send"}
                   </a>
                   <button
                     onClick={() => setReminder(i, result)}

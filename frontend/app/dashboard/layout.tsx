@@ -44,6 +44,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
+  // Silently wake up Render server on mount to avoid cold-start delay
+  useEffect(() => {
+    const base = process.env.NEXT_PUBLIC_API_URL?.replace("/v1", "") || "http://localhost:8000";
+    fetch(`${base}/health`, { method: "GET" }).catch(() => {});
+  }, []);
+
   useEffect(() => {
     const fetchPlan = async () => {
       const token = await getToken();

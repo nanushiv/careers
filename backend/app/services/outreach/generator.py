@@ -126,6 +126,9 @@ class OutreachService:
         context: str = "",
         user_id: Optional[str] = None,
         user_plan: str = "pro",
+        sender_email: str = "",
+        sender_linkedin: str = "",
+        sender_phone: str = "",
     ) -> OutreachResult:
         result = OutreachResult()
 
@@ -162,7 +165,20 @@ class OutreachService:
             data = llm_resp.as_json()
 
             result.subject = data.get("subject", "")
-            result.body = data.get("body", "")
+            body = data.get("body", "")
+
+            # Append professional signature
+            sig_lines = [f"\n\nWarm regards,", sender_name or ""]
+            if current_role:
+                sig_lines.append(current_role)
+            if sender_phone:
+                sig_lines.append(sender_phone)
+            if sender_email:
+                sig_lines.append(sender_email)
+            if sender_linkedin:
+                sig_lines.append(sender_linkedin)
+            result.body = body + "\n".join(sig_lines)
+
             result.tone = data.get("tone", "professional")
             result.word_count = data.get("word_count", 0)
             result.personalization_hooks = data.get("personalization_hooks", [])
@@ -202,6 +218,9 @@ class OutreachService:
                 context=recipient.get("context", ""),
                 user_id=user_id,
                 user_plan=user_plan,
+                sender_email=sender_profile.get("email", ""),
+                sender_linkedin=sender_profile.get("linkedin_url", ""),
+                sender_phone=sender_profile.get("phone", ""),
             )
             results.append({
                 "recipient": recipient,

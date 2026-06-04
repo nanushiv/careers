@@ -38,3 +38,9 @@ logs/
 # Build
 dist/
 build/
+
+# Local dev file uploads (R2 fallback)
+local_files/
+
+# TypeScript build cache
+frontend/tsconfig.tsbuildinfo

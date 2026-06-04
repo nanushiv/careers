@@ -22,6 +22,7 @@ class UpdateUserRequest(BaseModel):
     current_company: Optional[str] = None
     location: Optional[str] = None
     linkedin_url: Optional[str] = None
+    phone: Optional[str] = None
     onboarding_completed: Optional[bool] = None
     onboarding_step: Optional[int] = None
 
