@@ -262,69 +262,247 @@ class ResumeRewriter:
         return "\n".join(lines) if lines else "No specific before/after examples available."
 
     def _build_docx(self, sections: dict, raw_text: str) -> bytes:
-        doc = Document()
-        for section in doc.sections:
-            section.top_margin = Pt(72)
-            section.bottom_margin = Pt(72)
-            section.left_margin = Pt(72)
-            section.right_margin = Pt(72)
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+        from docx.enum.text import WD_TAB_ALIGNMENT, WD_TAB_LEADER
 
+        VIOLET = RGBColor(0x5B, 0x4F, 0xCF)
+        BLACK  = RGBColor(0x1A, 0x1A, 0x1A)
+        GRAY   = RGBColor(0x55, 0x55, 0x55)
+        FONT   = "Calibri"
+
+        doc = Document()
+        for sec in doc.sections:
+            sec.top_margin    = Pt(54)
+            sec.bottom_margin = Pt(54)
+            sec.left_margin   = Pt(64)
+            sec.right_margin  = Pt(64)
+
+        def _add_border_bottom(p, color_hex="5B4FCF"):
+            pPr = p._p.get_or_add_pPr()
+            pBdr = OxmlElement("w:pBdr")
+            bottom = OxmlElement("w:bottom")
+            bottom.set(qn("w:val"), "single")
+            bottom.set(qn("w:sz"), "4")
+            bottom.set(qn("w:space"), "1")
+            bottom.set(qn("w:color"), color_hex)
+            pBdr.append(bottom)
+            pPr.append(pBdr)
+
+        def _add_right_tab(p):
+            """Add a right-aligned tab stop at the page margin."""
+            pPr = p._p.get_or_add_pPr()
+            tabs = OxmlElement("w:tabs")
+            tab = OxmlElement("w:tab")
+            tab.set(qn("w:val"), "right")
+            tab.set(qn("w:pos"), "9360")   # ~6.5 inch content width in twips
+            tabs.append(tab)
+            pPr.append(tabs)
+
+        def heading(title):
+            p = doc.add_paragraph()
+            run = p.add_run(title.upper())
+            run.bold = True
+            run.font.size = Pt(10)
+            run.font.color.rgb = VIOLET
+            run.font.name = FONT
+            p.paragraph_format.space_before = Pt(10)
+            p.paragraph_format.space_after  = Pt(3)
+            _add_border_bottom(p)
+            return p
+
+        def name_line(text):
+            p = doc.add_paragraph()
+            run = p.add_run(text)
+            run.bold = True
+            run.font.size = Pt(22)
+            run.font.color.rgb = BLACK
+            run.font.name = FONT
+            p.paragraph_format.space_before = Pt(0)
+            p.paragraph_format.space_after  = Pt(2)
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        def contact_line(text):
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            p = doc.add_paragraph()
+            run = p.add_run(text)
+            run.font.size = Pt(9)
+            run.font.color.rgb = GRAY
+            run.font.name = FONT
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p.paragraph_format.space_after = Pt(4)
+
+        def job_title_line(title, company, date_range):
+            """Role • Company (italic gray) [TAB] Date"""
+            p = doc.add_paragraph()
+            _add_right_tab(p)
+            r1 = p.add_run(title)
+            r1.bold = True; r1.font.size = Pt(10); r1.font.color.rgb = BLACK; r1.font.name = FONT
+            r2 = p.add_run("  •  ")
+            r2.font.size = Pt(10); r2.font.color.rgb = GRAY; r2.font.name = FONT
+            r3 = p.add_run(company)
+            r3.italic = True; r3.font.size = Pt(10); r3.font.color.rgb = GRAY; r3.font.name = FONT
+            r4 = p.add_run("\t" + date_range)
+            r4.font.size = Pt(10); r4.font.color.rgb = GRAY; r4.font.name = FONT
+            p.paragraph_format.space_before = Pt(7)
+            p.paragraph_format.space_after  = Pt(2)
+
+        def bullet_line(text):
+            p = doc.add_paragraph(style="List Bullet")
+            run = p.add_run(text)
+            run.font.size = Pt(9.5)
+            run.font.color.rgb = BLACK
+            run.font.name = FONT
+            p.paragraph_format.space_before = Pt(1)
+            p.paragraph_format.space_after  = Pt(1)
+            p.paragraph_format.left_indent  = Pt(12)
+
+        def body_text(text, size=9.5, color=None, italic=False):
+            p = doc.add_paragraph()
+            run = p.add_run(text)
+            run.font.size = Pt(size)
+            run.font.color.rgb = color or BLACK
+            run.font.name = FONT
+            run.italic = italic
+            p.paragraph_format.space_before = Pt(3)
+            p.paragraph_format.space_after  = Pt(3)
+            return p
+
+        def education_line(degree, institution, date_range):
+            p = doc.add_paragraph()
+            _add_right_tab(p)
+            r1 = p.add_run(degree)
+            r1.bold = True; r1.font.size = Pt(9.5); r1.font.color.rgb = BLACK; r1.font.name = FONT
+            r2 = p.add_run(", " + institution)
+            r2.font.size = Pt(9.5); r2.font.color.rgb = GRAY; r2.font.name = FONT
+            r3 = p.add_run("\t" + date_range)
+            r3.font.size = Pt(9.5); r3.font.color.rgb = GRAY; r3.font.name = FONT
+            p.paragraph_format.space_before = Pt(4)
+            p.paragraph_format.space_after  = Pt(2)
+
+        # ── Fallback: no structured data ────────────────────────────────
         if not sections or len(sections) < 2:
             for line in raw_text.split("\n"):
                 line = line.strip()
                 if line:
-                    doc.add_paragraph(line).paragraph_format.space_after = Pt(2)
-        else:
-            order = ["header", "summary", "core_competencies", "experience", "education",
-                     "skills", "projects", "certifications", "awards"]
-            written = set()
-            for key in order:
-                if key in sections and sections[key]:
-                    if key == "header":
-                        # Header: no heading line, just render the text directly
-                        self._docx_body(doc, sections[key])
+                    body_text(line)
+            buf = io.BytesIO()
+            doc.save(buf)
+            return buf.getvalue()
+
+        # ── HEADER ──────────────────────────────────────────────────────
+        hdr = sections.get("header", "")
+        lines = [l.strip() for l in hdr.split("\n") if l.strip()]
+        if lines:
+            name_line(lines[0])
+        if len(lines) > 1:
+            contact_line("  |  ".join(lines[1:]))
+
+        # ── SUMMARY ─────────────────────────────────────────────────────
+        if sections.get("summary"):
+            heading("Professional Summary")
+            body_text(sections["summary"].strip())
+
+        # ── CORE COMPETENCIES ───────────────────────────────────────────
+        if sections.get("core_competencies"):
+            heading("Core Competencies")
+            body_text(sections["core_competencies"].strip(), color=GRAY)
+
+        # ── EXPERIENCE ──────────────────────────────────────────────────
+        exp_text = sections.get("experience", "")
+        if exp_text:
+            heading("Experience")
+            current_job_bullets = []
+            current_job_header  = None
+
+            for line in exp_text.split("\n"):
+                line = line.strip()
+                if not line:
+                    continue
+                # Detect job header lines: contain | or contain dates like "2020" or "–"
+                is_job_header = (
+                    "|" in line and ("20" in line or "–" in line or "-" in line)
+                ) or (
+                    ("–" in line or " - " in line) and
+                    any(str(y) in line for y in range(2010, 2030)) and
+                    len(line) < 120
+                )
+                if is_job_header:
+                    # Flush previous job
+                    if current_job_header:
+                        parts = current_job_header.split("|")
+                        if len(parts) >= 3:
+                            job_title_line(parts[0].strip(), parts[1].strip(), parts[2].strip())
+                        elif len(parts) == 2:
+                            job_title_line(parts[0].strip(), parts[1].strip(), "")
+                        else:
+                            body_text(current_job_header, size=9.5)
+                        for b in current_job_bullets:
+                            bullet_line(b)
+                    current_job_header  = line
+                    current_job_bullets = []
+                elif line.startswith("•") or line.startswith("-") or line.startswith("*"):
+                    current_job_bullets.append(line.lstrip("•-* ").strip())
+                else:
+                    current_job_bullets.append(line)
+
+            # Flush last job
+            if current_job_header:
+                parts = current_job_header.split("|")
+                if len(parts) >= 3:
+                    job_title_line(parts[0].strip(), parts[1].strip(), parts[2].strip())
+                elif len(parts) == 2:
+                    job_title_line(parts[0].strip(), parts[1].strip(), "")
+                else:
+                    body_text(current_job_header, size=9.5)
+                for b in current_job_bullets:
+                    bullet_line(b)
+
+        # ── EDUCATION ───────────────────────────────────────────────────
+        if sections.get("education"):
+            heading("Education")
+            for line in sections["education"].split("\n"):
+                line = line.strip()
+                if not line:
+                    continue
+                # Try to parse "Degree, Institution | Date" or plain
+                if "|" in line:
+                    parts = line.split("|")
+                    deg_inst = parts[0].strip()
+                    date     = parts[1].strip() if len(parts) > 1 else ""
+                    if "," in deg_inst:
+                        deg, inst = deg_inst.split(",", 1)
+                        education_line(deg.strip(), inst.strip(), date)
                     else:
-                        self._docx_heading(doc, key.replace("_", " ").upper())
-                        self._docx_body(doc, sections[key])
-                    written.add(key)
-            for key, val in sections.items():
-                if key not in written and val:
-                    self._docx_heading(doc, key.replace("_", " ").upper())
-                    self._docx_body(doc, val)
+                        education_line(deg_inst, "", date)
+                else:
+                    body_text(line, size=9.5)
+
+        # ── SKILLS ──────────────────────────────────────────────────────
+        if sections.get("skills"):
+            heading("Skills")
+            for line in sections["skills"].split("\n"):
+                line = line.strip()
+                if line:
+                    body_text(line, size=9.5, color=GRAY)
+
+        # ── REMAINING SECTIONS ──────────────────────────────────────────
+        done = {"header", "summary", "core_competencies", "experience", "education",
+                "skills", "sections_changed", "changes_summary"}
+        for key in ["projects", "certifications", "awards"]:
+            if sections.get(key):
+                heading(key.replace("_", " ").title())
+                body_text(sections[key].strip(), size=9.5, color=GRAY)
+                done.add(key)
+        for key, val in sections.items():
+            if key not in done and val and isinstance(val, str) and val.strip():
+                heading(key.replace("_", " ").title())
+                body_text(val.strip(), size=9.5)
 
         buf = io.BytesIO()
         doc.save(buf)
         return buf.getvalue()
-
-    def _docx_heading(self, doc: Document, title: str):
-        from docx.oxml.ns import qn
-        from docx.oxml import OxmlElement
-        p = doc.add_paragraph()
-        run = p.add_run(title)
-        run.bold = True
-        run.font.size = Pt(11)
-        run.font.color.rgb = RGBColor(0x1a, 0x1a, 0x2e)
-        p.paragraph_format.space_before = Pt(10)
-        p.paragraph_format.space_after = Pt(2)
-        pPr = p._p.get_or_add_pPr()
-        pBdr = OxmlElement("w:pBdr")
-        bottom = OxmlElement("w:bottom")
-        bottom.set(qn("w:val"), "single")
-        bottom.set(qn("w:sz"), "4")
-        bottom.set(qn("w:space"), "1")
-        bottom.set(qn("w:color"), "AAAAAA")
-        pBdr.append(bottom)
-        pPr.append(pBdr)
-
-    def _docx_body(self, doc: Document, text: str):
-        for line in text.split("\n"):
-            line = line.strip()
-            if not line:
-                continue
-            p = doc.add_paragraph(line)
-            p.paragraph_format.space_after = Pt(1)
-            if p.runs:
-                p.runs[0].font.size = Pt(10)
 
     def _build_pdf(self, sections: dict, raw_text: str) -> bytes:
         from reportlab.lib.pagesizes import letter
@@ -332,74 +510,132 @@ class ResumeRewriter:
         from reportlab.lib.units import inch
         from reportlab.lib import colors
         from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
-        from reportlab.lib.enums import TA_LEFT
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT
+
+        VIOLET = colors.HexColor("#5B4FCF")
+        BLACK  = colors.HexColor("#1A1A1A")
+        GRAY   = colors.HexColor("#555555")
 
         buf = io.BytesIO()
         doc = SimpleDocTemplate(
-            buf,
-            pagesize=letter,
-            leftMargin=inch,
-            rightMargin=inch,
-            topMargin=inch,
-            bottomMargin=inch,
+            buf, pagesize=letter,
+            leftMargin=0.75*inch, rightMargin=0.75*inch,
+            topMargin=0.65*inch, bottomMargin=0.65*inch,
         )
 
         styles = getSampleStyleSheet()
-        heading_style = ParagraphStyle(
-            "Heading",
-            parent=styles["Normal"],
-            fontSize=11,
-            fontName="Helvetica-Bold",
-            textColor=colors.HexColor("#1a1a2e"),
-            spaceAfter=4,
-            spaceBefore=12,
-        )
-        body_style = ParagraphStyle(
-            "Body",
-            parent=styles["Normal"],
-            fontSize=10,
-            fontName="Helvetica",
-            leading=14,
-            spaceAfter=2,
-        )
+
+        name_style = ParagraphStyle("Name", parent=styles["Normal"],
+            fontSize=20, fontName="Helvetica-Bold", textColor=BLACK,
+            alignment=TA_CENTER, spaceAfter=4)
+        contact_style = ParagraphStyle("Contact", parent=styles["Normal"],
+            fontSize=9, fontName="Helvetica", textColor=GRAY,
+            alignment=TA_CENTER, spaceAfter=8)
+        section_style = ParagraphStyle("Section", parent=styles["Normal"],
+            fontSize=10, fontName="Helvetica-Bold", textColor=VIOLET,
+            spaceBefore=10, spaceAfter=2)
+        job_style = ParagraphStyle("Job", parent=styles["Normal"],
+            fontSize=10, fontName="Helvetica-Bold", textColor=BLACK,
+            spaceBefore=6, spaceAfter=2)
+        body_style = ParagraphStyle("Body", parent=styles["Normal"],
+            fontSize=9.5, fontName="Helvetica", textColor=BLACK,
+            leading=13, spaceAfter=2)
+        bullet_style = ParagraphStyle("Bullet", parent=styles["Normal"],
+            fontSize=9.5, fontName="Helvetica", textColor=BLACK,
+            leading=13, spaceAfter=2, leftIndent=12, firstLineIndent=-8)
+        gray_style = ParagraphStyle("Gray", parent=styles["Normal"],
+            fontSize=9, fontName="Helvetica", textColor=GRAY,
+            leading=13, spaceAfter=2)
+
+        def e(text):
+            return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+        def add_heading(title):
+            story.append(Paragraph(title.upper(), section_style))
+            story.append(HRFlowable(width="100%", thickness=1, color=VIOLET, spaceAfter=3))
 
         story = []
-        order = ["header", "summary", "core_competencies", "experience", "education",
-                 "skills", "projects", "certifications", "awards"]
-        written = set()
-
-        def add_section(title: str, text: str):
-            story.append(Paragraph(title.upper(), heading_style))
-            story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#AAAAAA"), spaceAfter=4))
-            for line in text.split("\n"):
-                line = line.strip()
-                if line:
-                    line = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                    story.append(Paragraph(line, body_style))
-            story.append(Spacer(1, 6))
 
         if not sections or len(sections) < 2:
             for line in raw_text.split("\n"):
                 line = line.strip()
                 if line:
-                    line = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                    story.append(Paragraph(line, body_style))
-        else:
-            for key in order:
-                if key in sections and sections[key]:
-                    if key == "header":
-                        for line in sections[key].split("\n"):
-                            line = line.strip()
-                            if line:
-                                line = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                                story.append(Paragraph(line, body_style))
-                        story.append(Spacer(1, 4))
-                    else:
-                        add_section(key.replace("_", " "), sections[key])
-                    written.add(key)
-            for key, val in sections.items():
-                if key not in written and val:
-                    add_section(key.replace("_", " "), val)
+                    story.append(Paragraph(e(line), body_style))
+            doc.build(story)
+            return buf.getvalue()
+
+        # Header
+        hdr_lines = [l.strip() for l in sections.get("header", "").split("\n") if l.strip()]
+        if hdr_lines:
+            story.append(Paragraph(e(hdr_lines[0]), name_style))
+        if len(hdr_lines) > 1:
+            story.append(Paragraph(e("  |  ".join(hdr_lines[1:])), contact_style))
+
+        # Summary
+        if sections.get("summary"):
+            add_heading("Professional Summary")
+            story.append(Paragraph(e(sections["summary"].strip()), body_style))
+            story.append(Spacer(1, 4))
+
+        # Core competencies
+        if sections.get("core_competencies"):
+            add_heading("Core Competencies")
+            story.append(Paragraph(e(sections["core_competencies"].strip()), gray_style))
+            story.append(Spacer(1, 4))
+
+        # Experience
+        exp_text = sections.get("experience", "")
+        if exp_text:
+            add_heading("Experience")
+            for line in exp_text.split("\n"):
+                line = line.strip()
+                if not line:
+                    continue
+                is_job_header = (
+                    "|" in line and ("20" in line or "–" in line)
+                ) or (
+                    ("–" in line or " - " in line) and
+                    any(str(y) in line for y in range(2010, 2030)) and len(line) < 120
+                )
+                if is_job_header:
+                    story.append(Paragraph(e(line), job_style))
+                elif line.startswith("•") or line.startswith("-") or line.startswith("*"):
+                    story.append(Paragraph("• " + e(line.lstrip("•-* ").strip()), bullet_style))
+                else:
+                    story.append(Paragraph("• " + e(line), bullet_style))
+            story.append(Spacer(1, 4))
+
+        # Education
+        if sections.get("education"):
+            add_heading("Education")
+            for line in sections["education"].split("\n"):
+                line = line.strip()
+                if line:
+                    story.append(Paragraph(e(line), body_style))
+            story.append(Spacer(1, 4))
+
+        # Skills
+        if sections.get("skills"):
+            add_heading("Skills")
+            for line in sections["skills"].split("\n"):
+                line = line.strip()
+                if line:
+                    story.append(Paragraph(e(line), gray_style))
+            story.append(Spacer(1, 4))
+
+        # Remaining
+        done = {"header", "summary", "core_competencies", "experience", "education",
+                "skills", "sections_changed", "changes_summary"}
+        for key in ["projects", "certifications", "awards"]:
+            if sections.get(key):
+                add_heading(key.replace("_", " ").title())
+                story.append(Paragraph(e(sections[key].strip()), gray_style))
+                story.append(Spacer(1, 4))
+                done.add(key)
+        for key, val in sections.items():
+            if key not in done and val and isinstance(val, str) and val.strip():
+                add_heading(key.replace("_", " ").title())
+                story.append(Paragraph(e(val.strip()), body_style))
 
         doc.build(story)
         return buf.getvalue()
