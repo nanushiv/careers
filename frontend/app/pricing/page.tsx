@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { Check, Zap, Loader2, Lock, Sparkles } from "lucide-react";
+import { Check, Zap, Loader2, Lock, Sparkles, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 
@@ -32,16 +32,36 @@ const PRO_FEATURES = [
 export default function PricingPage() {
   const { getToken, isSignedIn } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
   const [userPlan, setUserPlan] = useState<string>("free");
+  const [priceDisplay, setPriceDisplay] = useState("₹999");
+  const [cancelConfirm, setCancelConfirm] = useState(false);
+  const [cancelledMsg, setCancelledMsg] = useState(false);
 
   useEffect(() => {
-    const fetchPlan = async () => {
+    const init = async () => {
+      // Fetch geo-based price
+      try {
+        const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/billing/country`);
+        const data = await resp.json();
+        if (data.data?.price_display) setPriceDisplay(data.data.price_display);
+      } catch { /* fallback to ₹999 */ }
+
+      // Fetch current plan
       const token = await getToken();
       if (!token) return;
       const resp = await api.getMe(token);
       if (resp.data?.plan) setUserPlan(resp.data.plan);
     };
-    if (isSignedIn) fetchPlan();
+    if (isSignedIn) init();
+    else {
+      // Still fetch price for non-signed-in visitors
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/billing/country`)
+        .then(r => r.json())
+        .then(d => { if (d.data?.price_display) setPriceDisplay(d.data.price_display); })
+        .catch(() => {});
+    }
   }, [getToken, isSignedIn]);
 
   const handleUpgrade = async () => {
@@ -59,6 +79,37 @@ export default function PricingPage() {
     finally { setLoading(false); }
   };
 
+  const handlePortal = async () => {
+    setPortalLoading(true);
+    try {
+      const token = await getToken();
+      const resp = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/billing/portal`,
+        { method: "POST", headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await resp.json();
+      if (data.data?.url) window.open(data.data.url, "_blank");
+    } catch (e) { console.error(e); }
+    finally { setPortalLoading(false); }
+  };
+
+  const handleCancel = async () => {
+    if (!cancelConfirm) { setCancelConfirm(true); return; }
+    setCancelLoading(true);
+    try {
+      const token = await getToken();
+      const resp = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/billing/cancel`,
+        { method: "POST", headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (resp.ok) {
+        setCancelledMsg(true);
+        setCancelConfirm(false);
+      }
+    } catch (e) { console.error(e); }
+    finally { setCancelLoading(false); }
+  };
+
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center px-6 py-16">
       {/* Header */}
@@ -71,7 +122,7 @@ export default function PricingPage() {
         </Link>
         <h1 className="text-4xl font-bold text-white">Simple, honest pricing</h1>
         <p className="text-gray-400 mt-3 max-w-md mx-auto">
-          Start free. Upgrade when you're serious about landing your next PM role.
+          Start free. Upgrade when you&apos;re serious about landing your next PM role.
         </p>
       </div>
 
@@ -98,7 +149,6 @@ export default function PricingPage() {
               <p className="text-xs font-semibold text-violet-400">Pro preview — Outreach Drafter</p>
             </div>
             <div className="relative px-4 pb-4">
-              {/* Blurred email preview */}
               <div className="mt-2 p-3 bg-gray-800/60 rounded-lg select-none" style={{ filter: "blur(3.5px)", pointerEvents: "none" }}>
                 <p className="text-xs text-gray-400 mb-0.5">Subject</p>
                 <p className="text-xs font-medium text-gray-200 mb-2">Loved your work on Stripe&#39;s PM onboarding</p>
@@ -106,7 +156,6 @@ export default function PricingPage() {
                   Hi Sarah, your recent post on scaling PM teams resonated — I&#39;ve done similar work reducing time-to-first-value by 40% at my last role. Would you have 20 minutes for a quick chat?
                 </p>
               </div>
-              {/* Overlay */}
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
                 <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-950/80 backdrop-blur-sm rounded-full border border-violet-500/30">
                   <Lock className="w-3 h-3 text-violet-400" />
@@ -118,8 +167,27 @@ export default function PricingPage() {
 
           <Link href={isSignedIn ? "/dashboard" : "/sign-up"}
             className="block w-full py-3 text-center text-sm font-medium text-gray-300 border border-gray-700 rounded-xl hover:bg-gray-800 transition-colors">
-            {!isSignedIn ? "Get Started Free" : userPlan === "free" ? "Current Plan" : "Downgrade to Free"}
+            {!isSignedIn ? "Get Started Free" : userPlan === "free" ? "Current Plan" : ""}
           </Link>
+          {isSignedIn && userPlan === "pro" && (
+            <div className="mt-3 space-y-2">
+              {cancelledMsg ? (
+                <p className="text-xs text-center text-amber-400">Your subscription will cancel at the end of the billing period.</p>
+              ) : (
+                <>
+                  <button onClick={handleCancel} disabled={cancelLoading}
+                    className="w-full py-2.5 text-center text-xs font-medium text-gray-500 hover:text-red-400 transition-colors border border-transparent hover:border-red-500/20 rounded-xl">
+                    {cancelLoading ? "Cancelling..." : cancelConfirm ? "Confirm — cancel my Pro subscription?" : "Downgrade to Free"}
+                  </button>
+                  {cancelConfirm && (
+                    <button onClick={() => setCancelConfirm(false)} className="w-full text-xs text-center text-gray-600 hover:text-gray-400">
+                      Never mind
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Pro */}
@@ -131,7 +199,7 @@ export default function PricingPage() {
           </div>
           <p className="text-sm font-semibold text-violet-400 uppercase tracking-wider">Pro</p>
           <div className="mt-3 mb-6">
-            <span className="text-4xl font-bold text-white">₹999</span>
+            <span className="text-4xl font-bold text-white">{priceDisplay}</span>
             <span className="text-gray-400 ml-1">/month</span>
           </div>
           <ul className="space-y-3 mb-8">
@@ -141,10 +209,24 @@ export default function PricingPage() {
               </li>
             ))}
           </ul>
-          <button onClick={handleUpgrade} disabled={loading || userPlan === "pro"}
-            className="w-full py-3 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors flex items-center justify-center gap-2">
-            {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Processing...</> : userPlan === "pro" ? "Current Plan ✓" : "Upgrade to Pro →"}
-          </button>
+
+          {userPlan === "pro" ? (
+            <div className="space-y-3">
+              <div className="w-full py-3 text-center text-sm font-semibold text-violet-300 bg-violet-600/20 border border-violet-500/40 rounded-xl">
+                Current Plan ✓
+              </div>
+              <button onClick={handlePortal} disabled={portalLoading}
+                className="w-full py-2.5 flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-medium rounded-xl border border-gray-700 transition-colors">
+                {portalLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+                Manage Billing
+              </button>
+            </div>
+          ) : (
+            <button onClick={handleUpgrade} disabled={loading}
+              className="w-full py-3 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors flex items-center justify-center gap-2">
+              {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Processing...</> : "Upgrade to Pro →"}
+            </button>
+          )}
           <p className="text-xs text-center text-gray-500 mt-3">Cancel anytime. No lock-in.</p>
         </div>
       </div>

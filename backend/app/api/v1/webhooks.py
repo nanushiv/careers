@@ -130,18 +130,28 @@ async def stripe_webhook(
         await _handle_sub_updated(event["data"]["object"])
     elif event_type == "customer.subscription.deleted":
         await _handle_sub_cancelled(event["data"]["object"])
+    elif event_type == "invoice.payment_failed":
+        await _handle_payment_failed(event["data"]["object"])
 
     return {"received": True}
 
 
 async def _handle_sub_created(sub: dict):
-    customer_id = sub["customer"]
-    plan = "pro"  # Determine from price ID
+    plan = "pro"
     user_metadata = sub.get("metadata", {})
     user_id = user_metadata.get("user_id")
 
     if user_id:
-        supabase.table("users").update({"plan": plan}).eq("id", user_id).execute()
+        from datetime import datetime, timezone
+        period_end_ts = sub.get("current_period_end")
+        period_end = datetime.fromtimestamp(period_end_ts, tz=timezone.utc).isoformat() if period_end_ts else None
+        period_start_ts = sub.get("current_period_start")
+        period_start = datetime.fromtimestamp(period_start_ts, tz=timezone.utc).isoformat() if period_start_ts else None
+
+        supabase.table("users").update({
+            "plan": plan,
+            "plan_expires_at": period_end,
+        }).eq("id", user_id).execute()
         supabase.table("usage_quotas").update({
             "analyses_limit": 9999,
             "applications_limit": 9999,
@@ -151,6 +161,9 @@ async def _handle_sub_created(sub: dict):
             "plan": plan,
             "status": "active",
             "stripe_sub_id": sub["id"],
+            "current_period_start": period_start,
+            "current_period_end": period_end,
+            "cancel_at_period_end": sub.get("cancel_at_period_end", False),
         }).execute()
         logger.info(f"Pro subscription created for user: {user_id}")
 
@@ -159,10 +172,27 @@ async def _handle_sub_updated(sub: dict):
     stripe_sub_id = sub["id"]
     status = sub["status"]
 
+    from datetime import datetime, timezone
+    period_end_ts = sub.get("current_period_end")
+    period_end = datetime.fromtimestamp(period_end_ts, tz=timezone.utc).isoformat() if period_end_ts else None
+    period_start_ts = sub.get("current_period_start")
+    period_start = datetime.fromtimestamp(period_start_ts, tz=timezone.utc).isoformat() if period_start_ts else None
+
     supabase.table("subscriptions").update({
         "status": status,
         "cancel_at_period_end": sub.get("cancel_at_period_end", False),
+        "current_period_start": period_start,
+        "current_period_end": period_end,
     }).eq("stripe_sub_id", stripe_sub_id).execute()
+
+    # Keep plan_expires_at in sync
+    sub_record = supabase.table("subscriptions").select("user_id").eq(
+        "stripe_sub_id", stripe_sub_id
+    ).limit(1).execute()
+    if sub_record.data and period_end:
+        supabase.table("users").update({
+            "plan_expires_at": period_end
+        }).eq("id", sub_record.data[0]["user_id"]).execute()
 
 
 async def _handle_sub_cancelled(sub: dict):
@@ -173,7 +203,7 @@ async def _handle_sub_cancelled(sub: dict):
 
     if sub_record.data:
         user_id = sub_record.data[0]["user_id"]
-        supabase.table("users").update({"plan": "free"}).eq("id", user_id).execute()
+        supabase.table("users").update({"plan": "free", "plan_expires_at": None}).eq("id", user_id).execute()
         supabase.table("usage_quotas").update({
             "analyses_limit": 5,
             "applications_limit": 10,
@@ -182,3 +212,16 @@ async def _handle_sub_cancelled(sub: dict):
             "status": "cancelled"
         }).eq("stripe_sub_id", stripe_sub_id).execute()
         logger.info(f"Subscription cancelled, user reverted to free: {user_id}")
+
+
+async def _handle_payment_failed(invoice: dict):
+    """Stripe invoice.payment_failed — warn but don't immediately downgrade.
+    Stripe retries payments for 3 days by default; we only downgrade on subscription.deleted."""
+    subscription_id = invoice.get("subscription")
+    customer_id = invoice.get("customer")
+    attempt_count = invoice.get("attempt_count", 1)
+    logger.warning(
+        f"Payment failed for customer={customer_id} sub={subscription_id} attempt={attempt_count}"
+    )
+    # On final retry failure, Stripe fires customer.subscription.deleted which handles downgrade.
+    # No immediate action needed — keeps UX non-disruptive for transient failures.

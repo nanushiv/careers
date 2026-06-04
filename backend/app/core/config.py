@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     SECRET_KEY: str = "change-me-in-production"
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000"]
+    FRONTEND_URL: str = "http://localhost:3000"  # Set to production URL in prod env
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod

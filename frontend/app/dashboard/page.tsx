@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { motion } from "framer-motion";
 import {
   TrendingUp, AlertCircle, CheckCircle2, Clock,
-  ArrowRight, Plus, Briefcase, FileText, Brain, Sparkles
+  ArrowRight, Plus, Briefcase, FileText, Brain, Sparkles, X
 } from "lucide-react";
 import Link from "next/link";
 import { api, DashboardData } from "@/lib/api";
@@ -20,6 +21,8 @@ const STAGES = ["applied", "screening", "phone_screen", "technical", "case_study
 
 export default function DashboardPage() {
   const { getToken } = useAuth();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +31,15 @@ export default function DashboardPage() {
   const [insights, setInsights] = useState<any[]>([]);
   const [generatingInsights, setGeneratingInsights] = useState(false);
   const [insightsTakingLong, setInsightsTakingLong] = useState(false);
+  const [showUpgradeBanner, setShowUpgradeBanner] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("upgraded") === "true") {
+      setShowUpgradeBanner(true);
+      // Remove the query param from URL without re-render
+      router.replace("/dashboard", { scroll: false });
+    }
+  }, [searchParams, router]);
 
   const load = async (isRetry = false) => {
     try {
@@ -93,6 +105,18 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
+      {showUpgradeBanner && (
+        <div className="flex items-center gap-3 px-5 py-4 bg-emerald-950/40 border border-emerald-500/30 rounded-xl">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-emerald-300">Welcome to CareerOS Pro!</p>
+            <p className="text-xs text-emerald-400/70 mt-0.5">All Pro features are now unlocked — job matches, outreach drafter, unlimited analyses.</p>
+          </div>
+          <button onClick={() => setShowUpgradeBanner(false)} className="text-emerald-600 hover:text-emerald-400">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
       {isNewUser && <GettingStartedBanner />}
       {!isNewUser && latestAnalysis && (
         <ResumeNudgeBanner

@@ -75,8 +75,8 @@ async def create_checkout(request: Request, current_user: dict = Depends(get_cur
             payment_method_types=["card"],
             line_items=[{"price": price_id, "quantity": 1}],
             mode="subscription",
-            success_url="https://careeros.ai/dashboard?upgraded=true",
-            cancel_url="https://careeros.ai/pricing",
+            success_url=f"{settings.FRONTEND_URL}/dashboard?upgraded=true",
+            cancel_url=f"{settings.FRONTEND_URL}/pricing",
             customer_email=user["email"],
             metadata={"user_id": user["id"]},
         )
@@ -85,6 +85,37 @@ async def create_checkout(request: Request, current_user: dict = Depends(get_cur
     except Exception as e:
         logger.error(f"Stripe checkout failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to create checkout session")
+
+
+@router.post("/cancel")
+async def cancel_subscription(current_user: dict = Depends(get_current_user)):
+    """Cancel the user's Pro subscription at period end (not immediately)."""
+    user_resp = supabase.table("users").select("id").eq(
+        "clerk_id", current_user["clerk_id"]
+    ).limit(1).execute()
+    if not user_resp.data:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    sub_resp = supabase.table("subscriptions").select("stripe_sub_id").eq(
+        "user_id", user_resp.data[0]["id"]
+    ).eq("status", "active").limit(1).execute()
+
+    if not sub_resp.data:
+        raise HTTPException(status_code=404, detail="No active subscription found")
+
+    try:
+        stripe.Subscription.modify(
+            sub_resp.data[0]["stripe_sub_id"],
+            cancel_at_period_end=True,
+        )
+        supabase.table("subscriptions").update({
+            "cancel_at_period_end": True
+        }).eq("stripe_sub_id", sub_resp.data[0]["stripe_sub_id"]).execute()
+        logger.info(f"Subscription set to cancel at period end: {sub_resp.data[0]['stripe_sub_id']}")
+        return {"success": True, "data": {"message": "Subscription will cancel at end of billing period."}}
+    except Exception as e:
+        logger.error(f"Cancel subscription failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to cancel subscription")
 
 
 @router.post("/portal")
@@ -107,7 +138,7 @@ async def billing_portal(current_user: dict = Depends(get_current_user)):
         sub = stripe.Subscription.retrieve(sub_resp.data[0]["stripe_sub_id"])
         portal = stripe.billing_portal.Session.create(
             customer=sub.customer,
-            return_url="https://careeros.ai/settings",
+            return_url=f"{settings.FRONTEND_URL}/settings",
         )
         return {"success": True, "data": {"url": portal.url}}
     except Exception as e:
