@@ -53,11 +53,11 @@ class Settings(BaseSettings):
     FROM_EMAIL: str = "onboarding@resend.dev"
     NOTIFY_EMAIL: str = "shivani27chaudhary@gmail.com"
 
-    # Payments
-    STRIPE_SECRET_KEY: str = ""
-    STRIPE_WEBHOOK_SECRET: str = ""
-    STRIPE_PRO_PRICE_ID: str = ""        # USD $29/month (global)
-    STRIPE_PRO_PRICE_ID_IN: str = ""     # INR ₹999/month (India)
+    # Payments — Razorpay (supports UPI, cards, net banking, wallets — India + global)
+    RAZORPAY_KEY_ID: str = ""            # rzp_test_... or rzp_live_...
+    RAZORPAY_KEY_SECRET: str = ""        # from Razorpay dashboard
+    RAZORPAY_PLAN_ID: str = ""           # plan_... (₹999/month INR)
+    RAZORPAY_WEBHOOK_SECRET: str = ""    # from Razorpay dashboard → Webhooks
 
     # Job sources
     ADZUNA_APP_ID: str = ""

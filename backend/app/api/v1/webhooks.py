@@ -101,127 +101,117 @@ def _verify_svix(
     return hmac.compare_digest(f"v1,{expected}", svix_signature or "")
 
 
-# ── Stripe Webhooks ───────────────────────────────────────────────────────────
+# ── Razorpay Webhooks ─────────────────────────────────────────────────────────
 
-@router.post("/stripe")
-async def stripe_webhook(
-    request: Request,
-    stripe_signature: Optional[str] = Header(None),
-):
-    """Handle Stripe subscription lifecycle events."""
-    import stripe
-    stripe.api_key = settings.STRIPE_SECRET_KEY
+@router.post("/razorpay")
+async def razorpay_webhook(request: Request):
+    """
+    Handle Razorpay subscription lifecycle events.
+    Verified via HMAC SHA256 using RAZORPAY_WEBHOOK_SECRET.
+    """
+    import hmac as _hmac
+    import hashlib
 
     body = await request.body()
 
-    try:
-        event = stripe.Webhook.construct_event(
-            body, stripe_signature, settings.STRIPE_WEBHOOK_SECRET
+    # Signature verification
+    if settings.RAZORPAY_WEBHOOK_SECRET:
+        received_sig = request.headers.get("x-razorpay-signature", "")
+        expected_sig = _hmac.new(
+            settings.RAZORPAY_WEBHOOK_SECRET.encode(),
+            body,
+            hashlib.sha256,
+        ).hexdigest()
+        if not _hmac.compare_digest(expected_sig, received_sig):
+            logger.warning("Invalid Razorpay webhook signature")
+            raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
+    payload = await request.json()
+    event = payload.get("event", "")
+    entity = payload.get("payload", {})
+
+    logger.info(f"Razorpay webhook: {event}")
+
+    if event == "subscription.activated":
+        # First successful payment — activate Pro
+        sub = entity.get("subscription", {}).get("entity", {})
+        await _rzp_handle_activated(sub)
+
+    elif event == "subscription.charged":
+        # Recurring payment succeeded — keep Pro active, update period
+        sub = entity.get("subscription", {}).get("entity", {})
+        await _rzp_handle_charged(sub)
+
+    elif event in ("subscription.cancelled", "subscription.completed", "subscription.expired"):
+        # Subscription ended — downgrade to Free
+        sub = entity.get("subscription", {}).get("entity", {})
+        await _rzp_handle_ended(sub, event)
+
+    elif event == "payment.failed":
+        payment = entity.get("payment", {}).get("entity", {})
+        logger.warning(
+            f"Razorpay payment failed: id={payment.get('id')} "
+            f"sub={payment.get('subscription_id')} reason={payment.get('error_description')}"
         )
-    except stripe.error.SignatureVerificationError:
-        raise HTTPException(status_code=400, detail="Invalid Stripe signature")
-
-    event_type = event["type"]
-    logger.info(f"Stripe webhook: {event_type}")
-
-    if event_type == "customer.subscription.created":
-        await _handle_sub_created(event["data"]["object"])
-    elif event_type == "customer.subscription.updated":
-        await _handle_sub_updated(event["data"]["object"])
-    elif event_type == "customer.subscription.deleted":
-        await _handle_sub_cancelled(event["data"]["object"])
-    elif event_type == "invoice.payment_failed":
-        await _handle_payment_failed(event["data"]["object"])
+        # Razorpay retries automatically — only downgrade on subscription.cancelled/expired
 
     return {"received": True}
 
 
-async def _handle_sub_created(sub: dict):
-    plan = "pro"
-    user_metadata = sub.get("metadata", {})
-    user_id = user_metadata.get("user_id")
-
-    if user_id:
-        from datetime import datetime, timezone
-        period_end_ts = sub.get("current_period_end")
-        period_end = datetime.fromtimestamp(period_end_ts, tz=timezone.utc).isoformat() if period_end_ts else None
-        period_start_ts = sub.get("current_period_start")
-        period_start = datetime.fromtimestamp(period_start_ts, tz=timezone.utc).isoformat() if period_start_ts else None
-
-        supabase.table("users").update({
-            "plan": plan,
-            "plan_expires_at": period_end,
-        }).eq("id", user_id).execute()
-        supabase.table("usage_quotas").update({
-            "analyses_limit": 9999,
-            "applications_limit": 9999,
-        }).eq("user_id", user_id).execute()
-        supabase.table("subscriptions").upsert({
-            "user_id": user_id,
-            "plan": plan,
-            "status": "active",
-            "stripe_sub_id": sub["id"],
-            "current_period_start": period_start,
-            "current_period_end": period_end,
-            "cancel_at_period_end": sub.get("cancel_at_period_end", False),
-        }).execute()
-        logger.info(f"Pro subscription created for user: {user_id}")
-
-
-async def _handle_sub_updated(sub: dict):
-    stripe_sub_id = sub["id"]
-    status = sub["status"]
-
+async def _rzp_handle_activated(sub: dict):
+    """subscription.activated — first payment succeeded, activate Pro."""
+    from app.api.v1.billing import _activate_pro
     from datetime import datetime, timezone
-    period_end_ts = sub.get("current_period_end")
-    period_end = datetime.fromtimestamp(period_end_ts, tz=timezone.utc).isoformat() if period_end_ts else None
-    period_start_ts = sub.get("current_period_start")
-    period_start = datetime.fromtimestamp(period_start_ts, tz=timezone.utc).isoformat() if period_start_ts else None
+
+    sub_id = sub.get("id", "")
+    notes = sub.get("notes", {})
+    user_id = notes.get("user_id", "")
+
+    if not user_id:
+        logger.error(f"No user_id in Razorpay subscription notes: {sub_id}")
+        return
+
+    charge_at = sub.get("charge_at")
+    period_end = datetime.fromtimestamp(charge_at, tz=timezone.utc).isoformat() if charge_at else None
+
+    _activate_pro(user_id, sub_id)
+    if period_end:
+        supabase.table("users").update({"plan_expires_at": period_end}).eq("id", user_id).execute()
+        supabase.table("subscriptions").update({
+            "current_period_end": period_end,
+        }).eq("stripe_sub_id", sub_id).execute()
+
+    logger.info(f"Pro activated via Razorpay webhook for user {user_id}, sub {sub_id}")
+
+
+async def _rzp_handle_charged(sub: dict):
+    """subscription.charged — recurring payment succeeded, refresh period dates."""
+    from datetime import datetime, timezone
+
+    sub_id = sub.get("id", "")
+    charge_at = sub.get("charge_at")
+    period_end = datetime.fromtimestamp(charge_at, tz=timezone.utc).isoformat() if charge_at else None
 
     supabase.table("subscriptions").update({
-        "status": status,
-        "cancel_at_period_end": sub.get("cancel_at_period_end", False),
-        "current_period_start": period_start,
+        "status": "active",
         "current_period_end": period_end,
-    }).eq("stripe_sub_id", stripe_sub_id).execute()
+    }).eq("stripe_sub_id", sub_id).execute()
 
-    # Keep plan_expires_at in sync
     sub_record = supabase.table("subscriptions").select("user_id").eq(
-        "stripe_sub_id", stripe_sub_id
+        "stripe_sub_id", sub_id
     ).limit(1).execute()
     if sub_record.data and period_end:
         supabase.table("users").update({
             "plan_expires_at": period_end
         }).eq("id", sub_record.data[0]["user_id"]).execute()
 
-
-async def _handle_sub_cancelled(sub: dict):
-    stripe_sub_id = sub["id"]
-    sub_record = supabase.table("subscriptions").select("user_id").eq(
-        "stripe_sub_id", stripe_sub_id
-    ).limit(1).execute()
-
-    if sub_record.data:
-        user_id = sub_record.data[0]["user_id"]
-        supabase.table("users").update({"plan": "free", "plan_expires_at": None}).eq("id", user_id).execute()
-        supabase.table("usage_quotas").update({
-            "analyses_limit": 5,
-            "applications_limit": 10,
-        }).eq("user_id", user_id).execute()
-        supabase.table("subscriptions").update({
-            "status": "cancelled"
-        }).eq("stripe_sub_id", stripe_sub_id).execute()
-        logger.info(f"Subscription cancelled, user reverted to free: {user_id}")
+    logger.info(f"Subscription renewed: {sub_id}")
 
 
-async def _handle_payment_failed(invoice: dict):
-    """Stripe invoice.payment_failed — warn but don't immediately downgrade.
-    Stripe retries payments for 3 days by default; we only downgrade on subscription.deleted."""
-    subscription_id = invoice.get("subscription")
-    customer_id = invoice.get("customer")
-    attempt_count = invoice.get("attempt_count", 1)
-    logger.warning(
-        f"Payment failed for customer={customer_id} sub={subscription_id} attempt={attempt_count}"
-    )
-    # On final retry failure, Stripe fires customer.subscription.deleted which handles downgrade.
-    # No immediate action needed — keeps UX non-disruptive for transient failures.
+async def _rzp_handle_ended(sub: dict, event: str):
+    """subscription.cancelled / completed / expired — downgrade to Free."""
+    from app.api.v1.billing import _deactivate_pro
+
+    sub_id = sub.get("id", "")
+    _deactivate_pro(sub_id)
+    logger.info(f"Subscription ended ({event}): {sub_id}")
