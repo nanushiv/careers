@@ -3,6 +3,7 @@ Webhooks — Clerk user lifecycle + Stripe subscription events.
 """
 from fastapi import APIRouter, Request, HTTPException, Header
 from typing import Optional
+from datetime import datetime, timezone
 import hmac
 import hashlib
 import logging
@@ -26,10 +27,11 @@ async def clerk_webhook(
     """Handle Clerk user lifecycle events."""
     body = await request.body()
 
-    # Verify Svix signature
-    if settings.CLERK_WEBHOOK_SECRET:
-        if not _verify_svix(body, svix_id, svix_timestamp, svix_signature):
-            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    # Verify Svix signature — always verify if secret is configured; reject if missing
+    if not settings.CLERK_WEBHOOK_SECRET:
+        raise HTTPException(status_code=503, detail="Webhook secret not configured")
+    if not _verify_svix(body, svix_id, svix_timestamp, svix_signature):
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     payload = await request.json()
     event_type = payload.get("type")
@@ -78,7 +80,7 @@ async def _handle_user_updated(data: dict):
 async def _handle_user_deleted(data: dict):
     clerk_id = data.get("id")
     supabase.table("users").update({
-        "deleted_at": "NOW()"
+        "deleted_at": datetime.now(timezone.utc).isoformat()
     }).eq("clerk_id", clerk_id).execute()
     logger.info(f"User soft-deleted: {clerk_id}")
 

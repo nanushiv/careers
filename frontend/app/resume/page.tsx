@@ -16,6 +16,7 @@ export default function ResumePage() {
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [jdModal, setJdModal] = useState<Resume | null>(null);
   const [jdText, setJdText] = useState("");
   const pollingRef = useRef<Record<string, NodeJS.Timeout>>({});
@@ -103,7 +104,13 @@ export default function ResumePage() {
   }, [getToken, pollParseStatus]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
+    onDrop: (files) => { setUploadError(null); onDrop(files); },
+    onDropRejected: (rejections) => {
+      const err = rejections[0]?.errors[0];
+      if (err?.code === "file-too-large") setUploadError("File too large. Max size is 10MB.");
+      else if (err?.code === "file-invalid-type") setUploadError("Invalid file type. Please upload a PDF or DOCX.");
+      else setUploadError("Could not upload file. Please try again.");
+    },
     accept: {
       "application/pdf": [".pdf"],
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
@@ -167,6 +174,14 @@ export default function ResumePage() {
           Manage resume versions and analyze them against job descriptions.
         </p>
       </div>
+
+      {/* Upload error */}
+      {uploadError && (
+        <div className="flex items-center gap-3 px-4 py-3 mb-4 bg-red-950/40 border border-red-500/30 rounded-xl text-sm text-red-300">
+          {uploadError}
+          <button onClick={() => setUploadError(null)} className="ml-auto text-red-400 hover:text-red-200">✕</button>
+        </div>
+      )}
 
       {/* Upload Zone */}
       <div

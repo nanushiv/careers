@@ -113,7 +113,11 @@ async def dev_get_token():
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             f"https://api.clerk.com/v1/sessions/{settings.CLERK_DEV_SESSION_ID}/tokens",
-            headers={"Authorization": f"Bearer {settings.CLERK_SECRET_KEY}"},
+            headers={
+                "Authorization": f"Bearer {settings.CLERK_SECRET_KEY}",
+                "Content-Type": "application/json",
+            },
+            content=b"{}",
         )
     data = resp.json()
     token = data.get("jwt")

@@ -34,7 +34,7 @@ export default function ApplicationsPage() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [getToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Check URL params for ?action=add
   useEffect(() => {
@@ -57,11 +57,17 @@ export default function ApplicationsPage() {
   };
 
   const handleStageChange = async (id: string, newStage: string) => {
+    const prevApps = applications;
     // Optimistic update
     setApplications((prev) => prev.map((a) => a.id === id ? { ...a, stage: newStage } : a));
-    const token = await getToken();
-    if (!token) return;
-    await api.updateApplication(token, id, { stage: newStage });
+    try {
+      const token = await getToken();
+      if (!token) { setApplications(prevApps); return; }
+      const resp = await api.updateApplication(token, id, { stage: newStage });
+      if (resp.error) setApplications(prevApps);
+    } catch {
+      setApplications(prevApps);
+    }
   };
 
   if (loading) return <ApplicationsSkeleton />;
@@ -158,7 +164,7 @@ export default function ApplicationsPage() {
 
           {/* Graveyard */}
           <div
-            className={`shrink-0 w-44 transition-colors ${dragOverStage === "rejected" ? "opacity-100 bg-red-500/10 ring-1 ring-red-500/40 rounded-xl" : "opacity-60"}`}
+            className={`shrink-0 w-44 transition-colors ${dragOverStage === "rejected" ? "bg-red-500/10 ring-1 ring-red-500/40 rounded-xl" : ""}`}
             onDragOver={(e) => { e.preventDefault(); setDragOverStage("rejected"); }}
             onDragLeave={() => setDragOverStage(null)}
             onDrop={(e) => {

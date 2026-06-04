@@ -40,11 +40,20 @@ class LLMResponse:
 
     def as_json(self) -> dict:
         """Parse JSON response — strips markdown code fences if present."""
+        import re
         text = self.text.strip()
         if text.startswith("```"):
             text = text.split("\n", 1)[1]
             text = text.rsplit("```", 1)[0]
-        return json.loads(text.strip())
+        text = text.strip()
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            # Fallback: extract the first {...} block from the response
+            match = re.search(r'\{[\s\S]*\}', text)
+            if match:
+                return json.loads(match.group())
+            raise
 
 
 class LLMClient:
@@ -101,7 +110,10 @@ class LLMClient:
                 logger.warning(f"Gemini 429 rate limit — retrying in {wait}s (attempt {attempt+1}/4)")
                 await asyncio.sleep(wait)
             try:
-                response = await gemini_model.generate_content_async(full_prompt, generation_config=config)
+                response = await asyncio.wait_for(
+                    gemini_model.generate_content_async(full_prompt, generation_config=config),
+                    timeout=30.0,
+                )
                 # response.text raises ValueError if content was blocked; access candidates directly
                 try:
                     text = response.text

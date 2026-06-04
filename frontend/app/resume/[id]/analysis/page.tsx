@@ -22,6 +22,7 @@ export default function AnalysisResultsPage() {
   const [polling, setPolling] = useState(!!jobId);
   const [activeTab, setActiveTab] = useState<"ats" | "recruiter" | "readiness" | "role_fit" | "roadmap">("ats");
   const [userPlan, setUserPlan] = useState<string>("free");
+  const [pollingError, setPollingError] = useState<string | null>(null);
   const [rewriteStatus, setRewriteStatus] = useState<"idle" | "loading" | "polling" | "completed" | "failed">("idle");
   const [improvedResumeUrl, setImprovedResumeUrl] = useState<string | null>(null);
   const [improvedPdfUrl, setImprovedPdfUrl] = useState<string | null>(null);
@@ -40,20 +41,28 @@ export default function AnalysisResultsPage() {
     if (!jobId) { loadAnalyses(); return; }
 
     const interval = setInterval(async () => {
-      const token = await getToken();
-      if (!token) return;
-      const resp = await api.listAnalyses(token, { resume_id: resumeId });
-      const real = (resp.data || []).filter(a => a.analysis_type !== "rewrite");
-      if (real.length > 0) {
-        setAnalyses(resp.data || []);
-        checkRewriteRecord(resp.data || []);
+      try {
+        const token = await getToken();
+        if (!token) { clearInterval(interval); setPolling(false); setLoading(false); return; }
+        const resp = await api.listAnalyses(token, { resume_id: resumeId });
+        if (resp.error) { clearInterval(interval); setPolling(false); setLoading(false); setPollingError("Failed to load analysis results."); return; }
+        const real = (resp.data || []).filter(a => a.analysis_type !== "rewrite");
+        if (real.length > 0) {
+          setAnalyses(resp.data || []);
+          checkRewriteRecord(resp.data || []);
+          setPolling(false);
+          setLoading(false);
+          clearInterval(interval);
+        }
+      } catch {
+        clearInterval(interval);
         setPolling(false);
         setLoading(false);
-        clearInterval(interval);
+        setPollingError("Connection error. Please refresh.");
       }
     }, 3000);
 
-    setTimeout(() => { clearInterval(interval); setPolling(false); setLoading(false); }, 120000);
+    setTimeout(() => { clearInterval(interval); setPolling(false); setLoading(false); setPollingError("Analysis is taking longer than expected. Please refresh."); }, 120000);
     return () => clearInterval(interval);
   }, [jobId]);
 
@@ -135,6 +144,16 @@ export default function AnalysisResultsPage() {
     { id: "role_fit" as const, label: "Role Fit", icon: Target, available: !!roleFit },
     { id: "roadmap" as const, label: "Roadmap", icon: AlertTriangle, available: !!ats },
   ];
+
+  if (pollingError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <AlertTriangle className="w-10 h-10 text-amber-400" />
+        <p className="text-gray-300 font-medium">{pollingError}</p>
+        <button onClick={() => { setPollingError(null); setLoading(true); loadAnalyses(); }} className="text-sm text-violet-400 hover:text-violet-300 underline">Try again</button>
+      </div>
+    );
+  }
 
   if (loading || polling) {
     return (
@@ -264,6 +283,18 @@ function ScorePill({ label, score }: { label: string; score?: number | null }) {
 function ReadinessPanel({ analysis }: { analysis: Analysis }) {
   const data = (analysis as any).readiness_breakdown || {};
   const dims = data.dimensions || {};
+
+  if (Object.keys(dims).length === 0) {
+    return (
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-10 text-center">
+        <AlertTriangle className="w-8 h-8 text-amber-400 mx-auto mb-3" />
+        <p className="text-gray-300 font-medium">Readiness data unavailable</p>
+        <p className="text-sm text-gray-500 mt-1">The AI analysis didn't return dimension data. Re-run the analysis from the Resume Vault.</p>
+        <Link href="/resume" className="inline-block mt-4 text-sm text-violet-400 hover:text-violet-300 underline">Go to Resume Vault →</Link>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">

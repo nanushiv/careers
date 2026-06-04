@@ -43,6 +43,7 @@ export default function PricingPage() {
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const [cancelledMsg, setCancelledMsg] = useState(false);
   const [upgraded, setUpgraded] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
   const rzpScriptLoaded = useRef(false);
 
   // Load Razorpay checkout.js once
@@ -114,8 +115,9 @@ export default function PricingPage() {
         },
       });
       rzp.open();
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      setErrorMsg(e?.message || "Something went wrong. Check console.");
       setLoading(false);
     }
   };
@@ -161,6 +163,14 @@ export default function PricingPage() {
           <Link href="/dashboard" className="text-xs text-emerald-400 hover:text-emerald-300 underline shrink-0">
             Go to Dashboard →
           </Link>
+        </div>
+      )}
+
+      {/* Error banner */}
+      {errorMsg && (
+        <div className="flex items-center gap-3 px-5 py-4 mb-6 bg-red-950/40 border border-red-500/30 rounded-xl w-full max-w-3xl">
+          <p className="text-sm text-red-300">{errorMsg}</p>
+          <button onClick={() => setErrorMsg("")} className="ml-auto text-red-400 hover:text-red-200 text-xs">✕</button>
         </div>
       )}
 

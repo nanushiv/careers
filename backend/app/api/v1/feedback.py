@@ -2,15 +2,20 @@
 Feedback API — collect and store product feedback + waitlist signups.
 No auth required — public endpoint.
 """
-from fastapi import APIRouter
+from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 import logging
+import time
 
 from app.core.database import supabase
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Simple in-memory rate limit: email → last_submission_ts
+_rate_limit: dict[str, float] = {}
+_RATE_LIMIT_WINDOW = 3600  # 1 submission per email per hour
 
 
 class FeedbackRequest(BaseModel):
@@ -27,7 +32,15 @@ class FeedbackRequest(BaseModel):
 
 
 @router.post("")
-async def submit_feedback(request: FeedbackRequest):
+async def submit_feedback(request: FeedbackRequest, http_request: Request):
+    # Rate limit by email
+    email_key = request.email.lower().strip()
+    now = time.time()
+    last = _rate_limit.get(email_key, 0)
+    if now - last < _RATE_LIMIT_WINDOW:
+        raise HTTPException(status_code=429, detail="Feedback already submitted recently. Please wait before submitting again.")
+    _rate_limit[email_key] = now
+
     try:
         supabase.table("feedback").insert({
             "email": request.email,

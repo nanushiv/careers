@@ -112,7 +112,7 @@ async def get_main_dashboard(current_user: dict = Depends(get_current_user)):
         "recent_applications": all_apps[:5],
     }
 
-    await cache_set(cache_key, dashboard_data, ttl=300)  # 5 min cache
+    await cache_set(cache_key, dashboard_data, ttl=90)  # 90s cache
     return api_response(data=dashboard_data)
 
 

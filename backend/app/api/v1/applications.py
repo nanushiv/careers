@@ -38,6 +38,11 @@ class CreateApplicationRequest(BaseModel):
     priority: str = "medium"
 
 
+VALID_STAGES = {
+    "applied", "screening", "phone_screen", "technical",
+    "case_study", "final", "offer", "rejected", "ghosted", "withdrawn",
+}
+
 class UpdateApplicationRequest(BaseModel):
     stage: Optional[str] = None
     outcome: Optional[str] = None
@@ -219,6 +224,8 @@ async def update_application(
         raise HTTPException(status_code=404, detail="Application not found")
 
     current = current_resp.data[0]
+    if request.stage and request.stage not in VALID_STAGES:
+        raise HTTPException(status_code=400, detail=f"Invalid stage. Must be one of: {', '.join(sorted(VALID_STAGES))}")
     update_data = request.model_dump(exclude_none=True)
     if request.next_follow_up_date:
         update_data["next_follow_up_date"] = request.next_follow_up_date.isoformat()

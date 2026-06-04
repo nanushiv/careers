@@ -104,6 +104,8 @@ async def trigger_analysis(
     jd_text = None
     jd_id = request.jd_id
     if request.jd_text and request.jd_text.strip():
+        if len(request.jd_text) > 50_000:
+            raise HTTPException(status_code=400, detail="Job description too long. Max 50,000 characters.")
         # Save pasted JD text to DB and get an ID
         jd_saved = supabase.table("job_descriptions").insert({
             "user_id": user["id"],
@@ -371,6 +373,15 @@ async def run_analyses_background(
                 stored = supabase.table("resume_analyses").insert(analysis_record).execute()
                 results.append({"type": analysis_type, "id": stored.data[0]["id"]})
 
+                # Fix #5: update ats_score_avg on the resume after a successful ATS analysis
+                if analysis_type == "ats":
+                    try:
+                        supabase.table("resumes").update({
+                            "ats_score_avg": round(result.overall_score)
+                        }).eq("id", resume["id"]).execute()
+                    except Exception as score_err:
+                        logger.warning(f"Failed to update ats_score_avg: {score_err}")
+
             except Exception as e:
                 logger.error(f"Analysis {analysis_type} failed: {e}")
                 results.append({"type": analysis_type, "error": str(e)})
@@ -382,11 +393,20 @@ async def run_analyses_background(
             "analyses_used": current_used + 1
         }).eq("user_id", user["id"]).execute()
 
-        # Mark job complete
-        supabase.table("analysis_jobs").update({
-            "status": "completed",
-            "results": results,
-        }).eq("id", job_id).execute()
+        # Fix #4: if every analysis failed, mark job as failed so frontend stops polling
+        successful = [r for r in results if "id" in r]
+        if not successful:
+            supabase.table("analysis_jobs").update({
+                "status": "failed",
+                "error": "All analyses failed. Check backend logs.",
+                "results": results,
+            }).eq("id", job_id).execute()
+        else:
+            # Mark job complete
+            supabase.table("analysis_jobs").update({
+                "status": "completed",
+                "results": results,
+            }).eq("id", job_id).execute()
 
     except Exception as e:
         logger.error(f"Analysis job {job_id} failed: {e}")

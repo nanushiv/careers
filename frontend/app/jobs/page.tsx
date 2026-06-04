@@ -57,7 +57,8 @@ export default function JobsPage() {
         // Any non-402 response = user has access
         setIsPro(true);
         if (data.success) {
-          setJobs(data.data.jobs || []);
+          const decodeHtml = (s: string) => s?.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(n)).replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"') ?? s;
+          setJobs((data.data.jobs || []).map((j: Job) => ({ ...j, title: decodeHtml(j.title), company: decodeHtml(j.company), snippet: decodeHtml(j.snippet) })));
           setLocationNote(data.data.location_note || null);
         } else {
           setApiError(data.detail || data.error?.message || "Something went wrong. Try again.");
@@ -65,7 +66,6 @@ export default function JobsPage() {
       }
     } catch (e) {
       console.error(e);
-      setIsPro(true); // Don't show paywall on network errors
       setApiError("Failed to load jobs. Check your connection.");
     } finally {
       setLoading(false);

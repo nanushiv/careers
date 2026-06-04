@@ -86,6 +86,7 @@ class ReadinessScorer:
 
         except Exception as e:
             logger.error(f"Readiness scoring failed: {e}")
+            raise
 
         if resume_id:
             await cache_manager.set_analysis(resume_id, target_role_type, "readiness", result.to_dict())

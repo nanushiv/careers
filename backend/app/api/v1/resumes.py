@@ -323,9 +323,13 @@ async def upload_to_r2(content: bytes, key: str, content_type: str) -> str:
 
     # Local fallback: save to backend/local_files/
     import os
-    local_dir = os.path.join(os.path.dirname(__file__), "../../../../local_files", os.path.dirname(key))
+    # Prevent path traversal: strip any leading slashes and resolve only the basename
+    safe_key = os.path.normpath(key).lstrip("/\\")
+    if ".." in safe_key.split(os.sep):
+        raise ValueError(f"Unsafe file key rejected: {key}")
+    local_dir = os.path.join(os.path.dirname(__file__), "../../../../local_files", os.path.dirname(safe_key))
     os.makedirs(local_dir, exist_ok=True)
-    local_path = os.path.join(os.path.dirname(__file__), "../../../../local_files", key)
+    local_path = os.path.join(os.path.dirname(__file__), "../../../../local_files", safe_key)
     with open(local_path, "wb") as f:
         f.write(content)
-    return f"http://localhost:8000/files/{key}"
+    return f"http://localhost:8000/files/{safe_key}"

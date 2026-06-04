@@ -85,13 +85,16 @@ export default function DashboardPage() {
       const poll = setInterval(async () => {
         attempts++;
         if (attempts === 5) setInsightsTakingLong(true);
-        const resp = await api.listInsights(token);
-        if (resp.data && resp.data.length > 0) {
-          setInsights(resp.data);
-          setGeneratingInsights(false);
-          setInsightsTakingLong(false);
-          clearInterval(poll);
-        }
+        try {
+          const resp = await api.listInsights(token);
+          if (resp.error) { clearInterval(poll); setGeneratingInsights(false); setInsightsTakingLong(false); return; }
+          if (resp.data && resp.data.length > 0) {
+            setInsights(resp.data);
+            setGeneratingInsights(false);
+            setInsightsTakingLong(false);
+            clearInterval(poll);
+          }
+        } catch { clearInterval(poll); setGeneratingInsights(false); setInsightsTakingLong(false); }
         if (attempts >= 15) {
           setGeneratingInsights(false);
           setInsightsTakingLong(false);
@@ -238,7 +241,7 @@ export default function DashboardPage() {
                 <div key={fu.id} className="flex items-center gap-2 py-1.5">
                   <div className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
                   <span className="text-xs text-gray-300 truncate">
-                    {fu.applications?.company_name} — {fu.due_date}
+                    {fu.applications?.company_name || (fu.application_id ? "Unknown" : "Outreach")} — {fu.due_date}
                   </span>
                 </div>
               ))}
