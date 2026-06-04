@@ -133,7 +133,13 @@ export default function DashboardPage() {
       {/* ── Top Row: Health + Stats ──────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         {/* Career Health Score */}
-        <div className="lg:col-span-1 bg-gray-900 border border-gray-800 rounded-xl p-6 flex flex-col items-center">
+        <div className={`lg:col-span-1 rounded-xl p-6 flex flex-col items-center border transition-colors ${
+          career_health_score >= 65
+            ? "bg-green-950/20 border-green-500/20"
+            : career_health_score >= 50
+            ? "bg-amber-950/20 border-amber-500/20"
+            : "bg-gray-900 border-gray-800"
+        }`}>
           <p className="text-sm font-medium text-gray-400 mb-4">Career Health</p>
           <CareerHealthGauge score={career_health_score} />
         </div>

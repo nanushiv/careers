@@ -7,13 +7,15 @@ interface CareerHealthGaugeProps {
 }
 
 const getColor = (score: number) => {
-  if (score >= 75) return { stroke: "#22c55e", text: "#4ade80", label: "Strong" };
-  if (score >= 50) return { stroke: "#f59e0b", text: "#fbbf24", label: "Building" };
-  return { stroke: "#ef4444", text: "#f87171", label: "Needs Work" };
+  if (score >= 80) return { stroke: "#22c55e", text: "#4ade80", label: "Top Shape", sub: "Keep applying!" };
+  if (score >= 65) return { stroke: "#10b981", text: "#34d399", label: "Strong", sub: "On the right track" };
+  if (score >= 50) return { stroke: "#f59e0b", text: "#fbbf24", label: "Building", sub: "Keep going" };
+  if (score >= 30) return { stroke: "#f97316", text: "#fb923c", label: "Early Stage", sub: "Log more activity" };
+  return { stroke: "#ef4444", text: "#f87171", label: "Needs Work", sub: "Start with your resume" };
 };
 
 export function CareerHealthGauge({ score }: CareerHealthGaugeProps) {
-  const { stroke, text, label } = getColor(score);
+  const { stroke, text, label, sub } = getColor(score);
 
   // SVG arc math
   const size = 140;
@@ -66,12 +68,12 @@ export function CareerHealthGauge({ score }: CareerHealthGaugeProps) {
       </div>
       <div className="text-center">
         <span
-          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
           style={{ backgroundColor: `${stroke}22`, color: text }}
         >
           {label}
         </span>
-        <p className="text-xs text-gray-500 mt-1">Career Health Score</p>
+        <p className="text-xs mt-1" style={{ color: `${stroke}99` }}>{sub}</p>
       </div>
     </div>
   );
