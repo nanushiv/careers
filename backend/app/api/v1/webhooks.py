@@ -164,6 +164,7 @@ async def razorpay_webhook(request: Request):
 async def _rzp_handle_activated(sub: dict):
     """subscription.activated — first payment succeeded, activate Pro."""
     from app.api.v1.billing import _activate_pro
+    from app.services.notifications.email import send_pro_welcome, _notify_team_new_subscriber
     from datetime import datetime, timezone
 
     sub_id = sub.get("id", "")
@@ -183,6 +184,13 @@ async def _rzp_handle_activated(sub: dict):
         supabase.table("subscriptions").update({
             "current_period_end": period_end,
         }).eq("stripe_sub_id", sub_id).execute()
+
+    # Send welcome email to user + notify founder
+    user_row = supabase.table("users").select("email, full_name").eq("id", user_id).execute()
+    if user_row.data:
+        u = user_row.data[0]
+        await send_pro_welcome(u["email"], u.get("full_name", ""))
+        await _notify_team_new_subscriber(u.get("full_name", ""), u["email"])
 
     logger.info(f"Pro activated via Razorpay webhook for user {user_id}, sub {sub_id}")
 

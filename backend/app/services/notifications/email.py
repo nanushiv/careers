@@ -155,3 +155,60 @@ async def _notify_team_feedback(email: str, name: str, would_pay: str):
         })
     except Exception:
         pass
+
+
+async def send_pro_welcome(to_email: str, user_name: str):
+    """Welcome email when a user upgrades to Pro."""
+    first = user_name.split()[0] if user_name else "there"
+    try:
+        resend.Emails.send({
+            "from": settings.FROM_EMAIL,
+            "to": to_email,
+            "subject": "Welcome to CareerOS Pro 🎉",
+            "html": f"""
+            <div style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#0d1117;color:#e5e7eb;padding:32px;border-radius:12px;">
+              <div style="text-align:center;margin-bottom:24px;">
+                <div style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#2563eb);padding:12px 20px;border-radius:10px;">
+                  <span style="font-size:24px;font-weight:700;color:#fff;">CareerOS Pro</span>
+                </div>
+              </div>
+              <h2 style="color:#fff;margin-top:0;">Welcome to Pro, {first}!</h2>
+              <p style="color:#d1d5db;">Your subscription is now active. Here's everything unlocked for you:</p>
+              <ul style="color:#a78bfa;line-height:2;">
+                <li>Unlimited AI resume analyses</li>
+                <li>Unlimited application tracking</li>
+                <li>AI Job Matches ranked by your resume fit</li>
+                <li>Outreach Drafter — personalised cold emails</li>
+                <li>AI contact suggestions for networking</li>
+                <li>Interview question generator</li>
+                <li>Weekly AI strategy insights</li>
+                <li>Full analytics &amp; score trends</li>
+              </ul>
+              <div style="text-align:center;margin-top:28px;">
+                <a href="{settings.FRONTEND_URL}/dashboard"
+                  style="background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;">
+                  Go to Dashboard →
+                </a>
+              </div>
+              <p style="color:#6b7280;font-size:12px;margin-top:28px;text-align:center;">
+                Questions? Reply to this email or chat with us on CareerOS.
+              </p>
+            </div>
+            """,
+        })
+        logger.info(f"Pro welcome email sent to {to_email}")
+    except Exception as e:
+        logger.error(f"Pro welcome email failed: {e}")
+
+
+async def _notify_team_new_subscriber(user_name: str, user_email: str):
+    """Notify founder when a new Pro subscriber signs up."""
+    try:
+        resend.Emails.send({
+            "from": settings.FROM_EMAIL,
+            "to": settings.NOTIFY_EMAIL,
+            "subject": f"💰 New Pro subscriber: {user_name or user_email}",
+            "html": f"<p><strong>{user_name}</strong> ({user_email}) just subscribed to CareerOS Pro!</p>",
+        })
+    except Exception:
+        pass

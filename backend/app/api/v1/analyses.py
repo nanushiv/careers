@@ -15,6 +15,7 @@ from app.services.analysis.ats_analyzer import ats_analyzer
 from app.services.analysis.recruiter_analyzer import recruiter_analyzer
 from app.services.analysis.readiness_scorer import readiness_scorer
 from app.services.analysis.role_fit_analyzer import role_fit_analyzer
+from app.services.analysis.interview_generator import interview_generator
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -202,6 +203,74 @@ async def list_analyses(
 
     resp = query.execute()
     return api_response(data=resp.data)
+
+
+# ── Interview Questions ────────────────────────────────────────────────────────
+
+class InterviewQuestionsRequest(BaseModel):
+    resume_id: str
+    role_title: str
+    company_name: str = ""
+    interview_stage: str = "general"  # general | phone | technical | final
+
+
+@router.post("/interview-questions")
+async def generate_interview_questions(
+    request: InterviewQuestionsRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Generate tailored interview questions for a resume + role. Available to all plans."""
+    user_resp = supabase.table("users").select("id, plan, email").eq(
+        "clerk_id", current_user["clerk_id"]
+    ).execute()
+    if not user_resp.data:
+        raise HTTPException(status_code=404, detail="User not found")
+    user = user_resp.data[0]
+
+    resume_resp = supabase.table("resumes").select("id, raw_text").eq(
+        "id", request.resume_id
+    ).eq("user_id", user["id"]).execute()
+    if not resume_resp.data or not resume_resp.data[0].get("raw_text"):
+        raise HTTPException(status_code=404, detail="Resume not found or not yet parsed")
+    resume = resume_resp.data[0]
+
+    result = await interview_generator.generate(
+        resume_text=resume["raw_text"],
+        role_title=request.role_title,
+        company_name=request.company_name,
+        interview_stage=request.interview_stage,
+        resume_id=resume["id"],
+        user_id=user["id"],
+        user_plan=user.get("plan", "free"),
+    )
+
+    # Persist to resume_analyses so results are cached and retrievable
+    record = {
+        "user_id": user["id"],
+        "resume_id": resume["id"],
+        "analysis_type": "interview_questions",
+        "interview_questions": {
+            "questions": result.questions,
+            "key_themes": result.key_themes,
+            "weak_points_to_prepare": result.weak_points_to_prepare,
+            "one_question_to_nail": result.one_question_to_nail,
+            "role_title": request.role_title,
+            "company_name": request.company_name,
+            "interview_stage": request.interview_stage,
+        },
+        "model_used": result.model_used,
+        "tokens_used": result.tokens_used,
+        "cost_usd": result.cost_usd,
+        "cache_hit": result.cache_hit,
+    }
+    stored = supabase.table("resume_analyses").insert(record).execute()
+    row_id = stored.data[0]["id"] if stored.data else None
+
+    return api_response(data={
+        "id": row_id,
+        "cache_hit": result.cache_hit,
+        **record["interview_questions"],
+    })
 
 
 # ── Background Job ────────────────────────────────────────────────────────────
