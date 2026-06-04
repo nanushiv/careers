@@ -11,7 +11,7 @@ import logging
 
 from app.core.security import get_current_user
 from app.core.database import supabase
-from app.core.config import is_admin
+from app.core.config import is_admin, settings
 from app.services.resume.parser import resume_parser
 
 logger = logging.getLogger(__name__)
@@ -332,4 +332,4 @@ async def upload_to_r2(content: bytes, key: str, content_type: str) -> str:
     local_path = os.path.join(os.path.dirname(__file__), "../../../../local_files", safe_key)
     with open(local_path, "wb") as f:
         f.write(content)
-    return f"http://localhost:8000/files/{safe_key}"
+    return f"{settings.API_BASE_URL}/files/{safe_key}"

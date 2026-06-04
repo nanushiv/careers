@@ -7,10 +7,11 @@ import json
 class Settings(BaseSettings):
     # App
     APP_ENV: str = "development"
-    DEBUG: bool = True
+    DEBUG: bool = False
     SECRET_KEY: str = "change-me-in-production"
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000"]
     FRONTEND_URL: str = "http://localhost:3000"  # Set to production URL in prod env
+    API_BASE_URL: str = "http://localhost:8000"  # Set to production API URL in prod env
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod

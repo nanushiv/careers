@@ -26,6 +26,14 @@ if settings.SENTRY_DSN and settings.APP_ENV == "production":
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("CareerOS API starting up...")
+    # Guard against deploying with insecure defaults
+    if settings.APP_ENV == "production":
+        if settings.SECRET_KEY == "change-me-in-production":
+            raise RuntimeError("SECRET_KEY must be set to a secure value in production")
+        if not settings.CLERK_WEBHOOK_SECRET:
+            logger.warning("CLERK_WEBHOOK_SECRET is not set — Clerk webhooks will be rejected")
+        if not settings.RAZORPAY_WEBHOOK_SECRET:
+            logger.warning("RAZORPAY_WEBHOOK_SECRET is not set — Razorpay webhooks will be rejected")
     await init_db()
     await init_cache()
     yield
@@ -77,10 +85,11 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    # Allow Vercel preview deployments only in non-production environments
+    allow_origin_regex=r"https://.*\.vercel\.app" if settings.APP_ENV != "production" else None,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
 )
 
 @app.exception_handler(Exception)
