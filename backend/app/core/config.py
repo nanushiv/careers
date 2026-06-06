@@ -9,19 +9,16 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     DEBUG: bool = False
     SECRET_KEY: str = "change-me-in-production"
-    ALLOWED_ORIGINS: List[str] = ["http://localhost:3000"]
-    FRONTEND_URL: str = "http://localhost:3000"  # Set to production URL in prod env
-    API_BASE_URL: str = "http://localhost:8000"  # Set to production API URL in prod env
+    ALLOWED_ORIGINS: str = "http://localhost:3000"  # Comma-separated or single URL
+    FRONTEND_URL: str = "http://localhost:3000"
+    API_BASE_URL: str = "http://localhost:8000"
 
-    @field_validator("ALLOWED_ORIGINS", mode="before")
-    @classmethod
-    def parse_origins(cls, v):
-        if isinstance(v, str):
-            v = v.strip()
-            if v.startswith("["):
-                return json.loads(v)
-            return [o.strip() for o in v.split(",") if o.strip()]
-        return v
+    @property
+    def allowed_origins_list(self) -> List[str]:
+        v = self.ALLOWED_ORIGINS.strip()
+        if v.startswith("["):
+            return json.loads(v)
+        return [o.strip() for o in v.split(",") if o.strip()]
 
     # Database
     DATABASE_URL: str
