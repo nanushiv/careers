@@ -64,7 +64,8 @@ export default function OnboardingPage() {
       router.push("/dashboard");
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      setError(msg);
+      const isNetwork = msg.toLowerCase().includes("load") || msg.toLowerCase().includes("fetch") || msg.toLowerCase().includes("network");
+      setError(isNetwork ? "Server is waking up — please try again in a few seconds." : msg);
       console.error(e);
     } finally {
       setSaving(false);
