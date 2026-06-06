@@ -177,7 +177,8 @@ export interface DashboardData {
     id: string;
     due_date: string;
     follow_up_type: string;
-    applications: { company_name: string; role_title: string; stage: string };
+    application_id?: string | null;
+    applications?: { company_name: string; role_title: string; stage: string } | null;
   }>;
   insights: Insight[];
   resumes: Resume[];
