@@ -57,7 +57,9 @@ export default function DashboardPage() {
         setError(null);
       }
     } catch (e) {
-      setError("Failed to load dashboard");
+      const msg = e instanceof Error ? e.message : String(e);
+      const isNetwork = msg.toLowerCase().includes("load") || msg.toLowerCase().includes("fetch") || msg.toLowerCase().includes("network");
+      setError(isNetwork ? "Server is waking up — tap Retry in a few seconds." : "Failed to load dashboard");
       console.error(e);
     } finally {
       setLoading(false);
