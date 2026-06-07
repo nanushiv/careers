@@ -7,7 +7,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://careers-chi-five.vercel.app"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://careers-lgfp.vercel.app"),
   title: "CareerOS — AI Career Intelligence System",
   description:
     "The AI-powered career operating system that tells you exactly why you're not getting hired — and how to fix it.",
