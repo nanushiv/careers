@@ -84,7 +84,7 @@ async def trigger_analysis(
             status_code=402,
             detail={
                 "code": "QUOTA_EXCEEDED",
-                "message": f"Free plan allows {quota['analyses_limit']} analyses/month. Upgrade to Pro for unlimited.",
+                "message": f"You've used your {quota['analyses_limit']} free analyses. Upgrade to Pro for unlimited AI analysis.",
                 "analyses_used": quota["analyses_used"],
                 "analyses_limit": quota["analyses_limit"],
                 "upgrade_url": "/pricing",

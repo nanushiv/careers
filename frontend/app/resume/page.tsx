@@ -19,13 +19,22 @@ export default function ResumePage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [jdModal, setJdModal] = useState<Resume | null>(null);
   const [jdText, setJdText] = useState("");
+  const [quota, setQuota] = useState<{ analyses_used: number; analyses_limit: number; plan?: string } | null>(null);
   const pollingRef = useRef<Record<string, NodeJS.Timeout>>({});
 
   const load = async () => {
     const token = await getToken();
     if (!token) return;
-    const resp = await api.listResumes(token);
-    if (resp.data) setResumes(resp.data);
+    const [resumesResp, meResp] = await Promise.all([
+      api.listResumes(token),
+      api.getMe(token),
+    ]);
+    if (resumesResp.data) setResumes(resumesResp.data);
+    const userPlan = meResp.data?.plan;
+    if (userPlan === "free" && (meResp.data as any)?.usage_quotas?.[0]) {
+      const q = (meResp.data as any).usage_quotas[0];
+      setQuota({ analyses_used: q.analyses_used, analyses_limit: q.analyses_limit, plan: userPlan });
+    }
     setLoading(false);
   };
 
@@ -160,9 +169,12 @@ export default function ResumePage() {
       if (resp.data?.job_id) {
         window.location.href = `/resume/${jdModal.id}/analysis?job=${resp.data.job_id}`;
       }
-    } catch (e) {
+    } catch (e: unknown) {
       console.error("Analysis trigger failed:", e);
       setAnalyzing(null);
+      if (e instanceof Error && e.message.includes("free analyses")) {
+        window.location.href = "/pricing";
+      }
     }
   };
 
@@ -180,6 +192,24 @@ export default function ResumePage() {
         <div className="flex items-center gap-3 px-4 py-3 mb-4 bg-red-950/40 border border-red-500/30 rounded-xl text-sm text-red-300">
           {uploadError}
           <button onClick={() => setUploadError(null)} className="ml-auto text-red-400 hover:text-red-200">✕</button>
+        </div>
+      )}
+
+      {/* Trial usage banner */}
+      {quota && (
+        <div className={`flex items-center justify-between px-4 py-3 mb-5 rounded-xl border text-sm ${
+          quota.analyses_used >= quota.analyses_limit
+            ? "bg-red-950/40 border-red-500/30 text-red-300"
+            : "bg-violet-950/30 border-violet-500/30 text-violet-300"
+        }`}>
+          <span>
+            {quota.analyses_used >= quota.analyses_limit
+              ? "You've used all your free analyses. Upgrade to Pro for unlimited AI analysis."
+              : `Free trial: ${quota.analyses_used} of ${quota.analyses_limit} analyses used`}
+          </span>
+          <a href="/pricing" className="ml-4 px-3 py-1 bg-violet-600 hover:bg-violet-500 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap">
+            Upgrade to Pro
+          </a>
         </div>
       )}
 
