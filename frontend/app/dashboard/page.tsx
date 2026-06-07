@@ -41,7 +41,7 @@ export default function DashboardPage() {
     }
   }, [searchParams, router]);
 
-  const load = async (isRetry = false) => {
+  const load = async (isRetry = false, attempt = 1) => {
     try {
       if (isRetry) setRetrying(true);
       const token = await getToken();
@@ -56,14 +56,19 @@ export default function DashboardPage() {
         setInsights(resp.data.insights ?? []);
         setError(null);
       }
+      setLoading(false);
+      setRetrying(false);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const isNetwork = msg.toLowerCase().includes("load") || msg.toLowerCase().includes("fetch") || msg.toLowerCase().includes("network");
-      setError(isNetwork ? "Server is waking up — tap Retry in a few seconds." : "Failed to load dashboard");
-      console.error(e);
-    } finally {
+      if (isNetwork && attempt < 4) {
+        setTimeout(() => load(false, attempt + 1), attempt * 2000);
+        return;
+      }
+      setError(isNetwork ? "Server is taking too long — please tap Retry." : "Failed to load dashboard");
       setLoading(false);
       setRetrying(false);
+      console.error(e);
     }
   };
 
