@@ -28,6 +28,16 @@ export default function AnalysisResultsPage() {
   const [improvedPdfUrl, setImprovedPdfUrl] = useState<string | null>(null);
   const [projectedAtsScore, setProjectedAtsScore] = useState<number | null>(null);
 
+  const downloadFile = async (url: string, filename: string) => {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
   useEffect(() => {
     (async () => {
       const token = await getToken();
@@ -209,15 +219,15 @@ export default function AnalysisResultsPage() {
         </div>
         {rewriteStatus === "completed" && improvedResumeUrl ? (
           <div className="flex items-center gap-2 shrink-0">
-            <a href={improvedResumeUrl} download
+            <button onClick={() => downloadFile(improvedResumeUrl!, "improved-resume.docx")}
               className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-xl transition-colors">
               <Download className="w-4 h-4" /> DOCX
-            </a>
+            </button>
             {improvedPdfUrl && (
-              <a href={improvedPdfUrl} download
+              <button onClick={() => downloadFile(improvedPdfUrl, "improved-resume.pdf")}
                 className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-xl transition-colors">
                 <Download className="w-4 h-4" /> PDF
-              </a>
+              </button>
             )}
           </div>
         ) : rewriteStatus === "polling" || rewriteStatus === "loading" ? (
