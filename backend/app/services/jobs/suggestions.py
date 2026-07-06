@@ -175,6 +175,25 @@ def _location_to_adzuna_country(location: str) -> Optional[str]:
     return None
 
 
+def _job_location_matches(job_location: str, requested_location: str) -> bool:
+    """Return True if the job's location is acceptable for the requested location.
+    Always accepts remote/worldwide jobs. For specific countries, checks for a match."""
+    jl = job_location.lower().strip()
+    # Always include remote/worldwide jobs
+    if any(w in jl for w in ("remote", "worldwide", "anywhere", "global", "")):
+        return True
+    # Check if job location mentions the requested country
+    rl = requested_location.lower().strip()
+    geo = _location_to_geo(rl)
+    if geo and geo in jl:
+        return True
+    # Direct substring match
+    for key in GEO_MAP:
+        if key in rl and key in jl:
+            return True
+    return False
+
+
 class JobSuggestionsService:
 
     async def get_suggestions(
@@ -264,6 +283,11 @@ class JobSuggestionsService:
                         n = _normalize_remotive(job)
                         is_geo = False
                     if n:
+                        # For specific location searches, filter remote boards to
+                        # only include worldwide/remote jobs or ones matching the country
+                        if not is_worldwide_search and not is_geo:
+                            if not _job_location_matches(n["location"], location_requested):
+                                continue
                         k = f"{n['title'].lower()}|{n['company'].lower()}"
                         if k not in seen_keys:
                             seen_keys.add(k)
