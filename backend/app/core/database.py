@@ -53,5 +53,4 @@ async def init_db():
             await conn.execute(__import__("sqlalchemy").text("SELECT 1"))
         logger.info("✅ Database connected")
     except Exception as e:
-        logger.error(f"❌ Database connection failed: {e}")
-        raise
+        logger.error(f"⚠️ Database connection check failed at startup (will retry on first request): {e}")
