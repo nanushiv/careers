@@ -98,13 +98,33 @@ async def _send_follow_ups():
 async def _send_digests():
     from app.core.database import supabase
     from app.services.notifications.email import send_weekly_digest
+    from app.api.v1.dashboard import _compute_career_health
 
-    users = supabase.table("users").select("id, email, full_name, career_health_score").is_(
+    users = supabase.table("users").select("id, email, full_name").is_(
         "deleted_at", "null"
     ).execute().data or []
 
     for user in users:
         try:
+            if not user.get("email"):
+                continue
+
+            all_apps = supabase.table("applications").select("stage, applied_date").eq(
+                "user_id", user["id"]
+            ).is_("deleted_at", "null").execute().data or []
+
+            active_apps = [a for a in all_apps if a["stage"] not in ("rejected", "ghosted", "withdrawn")]
+            callbacks = [a for a in all_apps if a["stage"] not in ("applied", "rejected", "ghosted")]
+            callback_rate = round(len(callbacks) / len(all_apps) * 100, 1) if all_apps else 0
+            health_score = _compute_career_health(
+                total_apps=len(all_apps),
+                callback_rate=callback_rate,
+                active_pipeline=len(active_apps),
+                has_interviews=any(a["stage"] in ("technical", "case_study", "final") for a in all_apps),
+                has_offers=any(a["stage"] == "offer" for a in all_apps),
+                ghost_rate=len([a for a in all_apps if a["stage"] == "ghosted"]) / max(len(all_apps), 1) * 100,
+            )
+
             insights = supabase.table("ai_insights").select("title, summary").eq(
                 "user_id", user["id"]
             ).eq("is_dismissed", False).order("created_at", desc=True).limit(3).execute().data or []
@@ -121,7 +141,7 @@ async def _send_digests():
             await send_weekly_digest(
                 to_email=user["email"],
                 user_name=user.get("full_name", ""),
-                career_health_score=user.get("career_health_score", 0) or 0,
+                career_health_score=health_score,
                 new_insights=insights,
                 follow_ups_due=len(follow_ups),
                 week_apps=len(week_apps),

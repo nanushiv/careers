@@ -50,8 +50,19 @@ async def send_weekly_digest(
     week_apps: int,
 ):
     """Send weekly career intelligence digest."""
+    first = user_name.split()[0] if user_name else "there"
+    score_color = "#4ade80" if career_health_score >= 65 else "#fbbf24" if career_health_score >= 50 else "#f87171"
+    next_action = (
+        "Log your applications this week to keep your pipeline active."
+        if week_apps == 0 else
+        f"Great — {week_apps} application{'s' if week_apps != 1 else ''} this week. Keep the momentum going."
+    )
+    followup_line = (
+        f'<p style="color:#fbbf24;">⚠️ You have <strong>{follow_ups_due} follow-up{"s" if follow_ups_due != 1 else ""}</strong> due — don\'t let those go cold.</p>'
+        if follow_ups_due > 0 else ""
+    )
     insights_html = "".join([
-        f"<li><strong>{i.get('title')}</strong>: {i.get('summary')}</li>"
+        f'<li style="margin-bottom:8px;"><strong style="color:#a78bfa;">{i.get("title")}</strong><br><span style="color:#9ca3af;">{i.get("summary","")}</span></li>'
         for i in new_insights[:3]
     ])
 
@@ -59,21 +70,35 @@ async def send_weekly_digest(
         resend.Emails.send({
             "from": settings.FROM_EMAIL,
             "to": to_email,
-            "subject": f"Your CareerOS Weekly Intelligence Report",
+            "subject": f"Your career health this week: {int(career_health_score)}/100",
             "html": f"""
-            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-              <h1>Weekly Intelligence Report</h1>
-              <p>Hi {user_name},</p>
-              <h2>Career Health: {career_health_score}/100</h2>
-              <p>You submitted {week_apps} applications this week.
-              {follow_ups_due} follow-ups are due.</p>
-              {"<h3>New Insights</h3><ul>" + insights_html + "</ul>" if new_insights else ""}
-              <p><a href="https://careeros.ai/dashboard" style="background: #7c3aed; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none;">
-                View Full Report
-              </a></p>
+            <div style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#0d1117;color:#e5e7eb;padding:32px;border-radius:12px;">
+              <div style="text-align:center;margin-bottom:24px;">
+                <span style="font-size:20px;font-weight:700;color:#fff;">CareerOS</span>
+                <span style="font-size:12px;color:#6b7280;display:block;margin-top:2px;">Weekly Intelligence Report</span>
+              </div>
+              <p style="color:#d1d5db;">Hi {first},</p>
+              <div style="text-align:center;margin:24px 0;padding:20px;background:#111827;border-radius:10px;border:1px solid #1f2937;">
+                <p style="color:#9ca3af;font-size:12px;margin:0 0 8px 0;">CAREER HEALTH SCORE</p>
+                <p style="font-size:56px;font-weight:700;color:{score_color};margin:0;line-height:1;">{int(career_health_score)}</p>
+                <p style="color:#6b7280;font-size:14px;margin:4px 0 0 0;">/100</p>
+              </div>
+              <p style="color:#d1d5db;">{next_action}</p>
+              {followup_line}
+              {"<h3 style='color:#fff;margin-top:24px;'>This Week's Insights</h3><ul style='padding-left:20px;color:#d1d5db;'>" + insights_html + "</ul>" if new_insights else ""}
+              <div style="text-align:center;margin-top:28px;">
+                <a href="{settings.FRONTEND_URL}/dashboard"
+                  style="background:#7c3aed;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;">
+                  View Dashboard →
+                </a>
+              </div>
+              <p style="color:#4b5563;font-size:11px;text-align:center;margin-top:24px;">
+                CareerOS · <a href="{settings.FRONTEND_URL}/settings" style="color:#4b5563;">Manage email preferences</a>
+              </p>
             </div>
             """,
         })
+        logger.info(f"Weekly digest sent to {to_email}")
     except Exception as e:
         logger.error(f"Weekly digest send failed: {e}")
 

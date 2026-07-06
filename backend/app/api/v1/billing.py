@@ -224,7 +224,7 @@ def _deactivate_pro(razorpay_sub_id: str):
         user_id = sub_record.data[0]["user_id"]
         supabase.table("users").update({"plan": "free", "plan_expires_at": None}).eq("id", user_id).execute()
         supabase.table("usage_quotas").update({
-            "analyses_limit": 2,
+            "analyses_limit": 5,
             "applications_limit": 10,
         }).eq("user_id", user_id).execute()
         supabase.table("subscriptions").update({
