@@ -258,16 +258,22 @@ class JobSuggestionsService:
                     return ("remotive", [])
 
             # Build all tasks and run concurrently
-            # "Remote" search → only remote boards (Jobicy + Remotive), skip Adzuna
+            # Specific location → Adzuna only (country-specific jobs)
+            # Remote/worldwide → Jobicy + Remotive (remote boards)
             tasks = []
-            if adzuna_country and ADZUNA_APP_ID and ADZUNA_APP_KEY and not is_worldwide_search:
-                tasks += [fetch_adzuna("product manager"), fetch_adzuna("senior product manager")]
-            tasks += [
-                fetch_jobicy("product manager"),
-                fetch_jobicy("product management"),
-                fetch_jobicy("senior product manager"),
-                fetch_remotive(),
-            ]
+            if not is_worldwide_search:
+                # Location-specific search: only use Adzuna (real country jobs)
+                if adzuna_country and ADZUNA_APP_ID and ADZUNA_APP_KEY:
+                    tasks += [fetch_adzuna("product manager"), fetch_adzuna("senior product manager")]
+                # No Jobicy/Remotive — they are remote-only boards and pollute results
+            else:
+                # Remote/worldwide search: use remote boards only
+                tasks += [
+                    fetch_jobicy("product manager"),
+                    fetch_jobicy("product management"),
+                    fetch_jobicy("senior product manager"),
+                    fetch_remotive(),
+                ]
             results = await asyncio.gather(*tasks)
 
             # Merge results
@@ -298,12 +304,10 @@ class JobSuggestionsService:
         # Build location note
         location_note: Optional[str] = None
         if not is_worldwide_search:
-            if len(geo_normalized) > 0:
-                location_note = None  # found country-specific results
-            elif adzuna_country or geo:
-                location_note = f"No PM jobs found in {location_requested.title()} right now. Showing worldwide remote roles instead."
-            else:
-                location_note = f"No direct feed for {location_requested.title()} yet. Showing worldwide remote roles."
+            if not adzuna_country:
+                location_note = f"Job search for '{location_requested.title()}' is not supported yet. Try: India, UK, USA, Canada, Australia, Germany, Singapore."
+            elif len(normalized) == 0:
+                location_note = f"No PM jobs found in {location_requested.title()} right now. Try a broader location or check back later."
 
         if not normalized:
             return {"jobs": [], "location_note": location_note}
