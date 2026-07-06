@@ -32,11 +32,14 @@ export default function JobsPage() {
   const [filter, setFilter] = useState<"all" | "high">("all");
   const [searchLocation, setSearchLocation] = useState("");
   const [authToken, setAuthToken] = useState("");
+  const [strongFitJobs, setStrongFitJobs] = useState<Job[]>([]);
 
   const load = async (loc = "") => {
     setLoading(true);
     setApiError(null);
     setLocationNote(null);
+    setStrongFitJobs([]);
+    setFilter("all");
     try {
       const token = await getToken();
       if (!token) return;
@@ -74,10 +77,35 @@ export default function JobsPage() {
 
   useEffect(() => { load(); }, []);
 
-  const filtered = jobs.filter(j => {
-    if (filter === "high" && j.fit_score < 70) return false;
-    return true;
-  });
+  const handleFilterChange = async (newFilter: "all" | "high") => {
+    setFilter(newFilter);
+    if (newFilter === "high" && strongFitJobs.length === 0) {
+      // Fetch worldwide jobs for strong fit (ignore location filter)
+      setLoading(true);
+      setApiError(null);
+      try {
+        const token = authToken || await getToken();
+        if (!token) return;
+        const resp = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/jobs/suggestions?limit=50`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const data = await resp.json();
+        if (data.success) {
+          const decodeHtml = (s: string) => s?.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(n)).replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"') ?? s;
+          setStrongFitJobs((data.data.jobs || []).map((j: Job) => ({ ...j, title: decodeHtml(j.title), company: decodeHtml(j.company), snippet: decodeHtml(j.snippet) })));
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  const filtered = filter === "high"
+    ? (strongFitJobs.length > 0 ? strongFitJobs : jobs).filter(j => j.fit_score >= 70)
+    : jobs;
 
   const scoreColor = (s: number) =>
     s >= 75 ? "text-green-400 bg-green-500/10 border-green-500/20"
@@ -124,7 +152,7 @@ export default function JobsPage() {
                 { id: "all", label: "All matches" },
                 { id: "high", label: "Strong fit (70+)" },
               ].map(f => (
-                <button key={f.id} onClick={() => setFilter(f.id as any)}
+                <button key={f.id} onClick={() => handleFilterChange(f.id as any)}
                   className={`px-3 py-1.5 text-xs font-medium rounded transition-all ${
                     filter === f.id ? "bg-violet-600 text-white" : "text-gray-400 hover:text-gray-200"
                   }`}>
