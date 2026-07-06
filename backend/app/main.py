@@ -95,7 +95,16 @@ app.add_middleware(
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
-    return JSONResponse(status_code=500, content={"success": False, "error": {"code": "INTERNAL_ERROR", "message": "An unexpected error occurred."}})
+    origin = request.headers.get("origin", "")
+    headers = {}
+    if origin in settings.allowed_origins_list or any(origin.endswith(".vercel.app") for origin in [origin]):
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+    return JSONResponse(
+        status_code=500,
+        content={"success": False, "error": {"code": "INTERNAL_ERROR", "message": "An unexpected error occurred."}},
+        headers=headers,
+    )
 
 app.include_router(api_router, prefix="/v1")
 
