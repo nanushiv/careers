@@ -42,11 +42,15 @@ async def get_main_dashboard(current_user: dict = Depends(get_current_user)):
         return api_response(data=cached)
 
     # ── Applications summary ──────────────────────────────────────────────────
-    apps = supabase.table("applications").select(
-        "id, stage, outcome, application_source, role_category, applied_date, company_name, role_title"
-    ).eq("user_id", user["id"]).is_("deleted_at", "null").execute()
+    try:
+        apps = supabase.table("applications").select(
+            "id, stage, outcome, application_source, role_category, applied_date, company_name, role_title"
+        ).eq("user_id", user["id"]).is_("deleted_at", "null").execute()
+        all_apps = apps.data or []
+    except Exception as e:
+        logger.error(f"Dashboard apps query failed: {e}")
+        all_apps = []
 
-    all_apps = apps.data or []
     active_apps = [a for a in all_apps if a["stage"] not in ("rejected", "ghosted", "withdrawn")]
 
     stage_counts = {}
@@ -64,23 +68,38 @@ async def get_main_dashboard(current_user: dict = Depends(get_current_user)):
 
     # ── Upcoming follow-ups ───────────────────────────────────────────────────
     today = datetime.now().date().isoformat()
-    follow_ups = supabase.table("follow_ups").select(
-        "*, applications(company_name, role_title, stage)"
-    ).eq("user_id", user["id"]).eq("status", "pending").gte(
-        "due_date", today
-    ).order("due_date").limit(5).execute()
+    try:
+        follow_ups = supabase.table("follow_ups").select(
+            "id, due_date, status, application_id"
+        ).eq("user_id", user["id"]).eq("status", "pending").gte(
+            "due_date", today
+        ).order("due_date").limit(5).execute()
+        follow_ups_data = follow_ups.data or []
+    except Exception as e:
+        logger.error(f"Dashboard follow_ups query failed: {e}")
+        follow_ups_data = []
 
     # ── Recent insights ───────────────────────────────────────────────────────
-    insights = supabase.table("ai_insights").select("*").eq(
-        "user_id", user["id"]
-    ).eq("is_dismissed", False).order(
-        "created_at", desc=True
-    ).limit(3).execute()
+    try:
+        insights = supabase.table("ai_insights").select("*").eq(
+            "user_id", user["id"]
+        ).eq("is_dismissed", False).order(
+            "created_at", desc=True
+        ).limit(3).execute()
+        insights_data = insights.data or []
+    except Exception as e:
+        logger.error(f"Dashboard insights query failed: {e}")
+        insights_data = []
 
     # ── Resume performance ────────────────────────────────────────────────────
-    resumes = supabase.table("resumes").select(
-        "id, version_label, callback_rate, applications_used, ats_score_avg, is_primary"
-    ).eq("user_id", user["id"]).is_("deleted_at", "null").execute()
+    try:
+        resumes = supabase.table("resumes").select(
+            "id, version_label, callback_rate, applications_used, ats_score_avg, is_primary"
+        ).eq("user_id", user["id"]).is_("deleted_at", "null").execute()
+        resumes_data = resumes.data or []
+    except Exception as e:
+        logger.error(f"Dashboard resumes query failed: {e}")
+        resumes_data = []
 
     # ── Career health score (weighted composite) ──────────────────────────────
     career_health = _compute_career_health(
@@ -106,14 +125,28 @@ async def get_main_dashboard(current_user: dict = Depends(get_current_user)):
             "callback_rate": callback_rate,
             "stage_distribution": stage_counts,
         },
-        "follow_ups": follow_ups.data or [],
-        "insights": insights.data or [],
-        "resumes": resumes.data or [],
+        "follow_ups": follow_ups_data,
+        "insights": insights_data,
+        "resumes": resumes_data,
         "recent_applications": all_apps[:5],
     }
 
     await cache_set(cache_key, dashboard_data, ttl=90)  # 90s cache
     return api_response(data=dashboard_data)
+
+
+@router.get("/debug-tables")
+async def debug_tables(current_user: dict = Depends(get_current_user)):
+    """Temporary: shows which Supabase tables are reachable for this user."""
+    user = get_user(current_user)
+    results = {}
+    for table in ["applications", "follow_ups", "ai_insights", "resumes", "usage_quotas"]:
+        try:
+            resp = supabase.table(table).select("id").eq("user_id", user["id"]).limit(1).execute()
+            results[table] = f"ok ({len(resp.data or [])} rows sample)"
+        except Exception as e:
+            results[table] = f"ERROR: {e}"
+    return {"user_id": user["id"], "tables": results}
 
 
 @router.get("/pipeline")
