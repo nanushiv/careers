@@ -34,7 +34,7 @@
 | AI | Google Gemini 1.5 Flash |
 | Storage | Cloudflare R2 |
 | Email | Resend |
-| Payments | Stripe |
+| Payments | Razorpay |
 | Hosting | Vercel (frontend) + Fly.io (backend) |
 
 ---
@@ -113,7 +113,7 @@ careeros/
 │   │   ├── intelligence/        # AI insights hub
 │   │   ├── analytics/           # Charts + metrics
 │   │   ├── settings/            # Profile management
-│   │   ├── pricing/             # Stripe upgrade page
+│   │   ├── pricing/             # Razorpay upgrade page
 │   │   └── onboarding/          # 3-step setup wizard
 │   ├── components/
 │   │   ├── analysis/            # ATS score, recruiter panel, gap grid
@@ -210,8 +210,8 @@ GET    /v1/insights                   List AI insights
 POST   /v1/insights/{id}/dismiss     Dismiss insight
 
 # Billing
-POST   /v1/billing/create-checkout   Stripe checkout session
-POST   /v1/billing/portal            Stripe customer portal
+POST   /v1/billing/create-checkout   Razorpay checkout session
+POST   /v1/billing/portal            Razorpay customer portal
 ```
 
 ---
