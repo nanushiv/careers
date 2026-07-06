@@ -118,6 +118,17 @@ async def health_check():
     return {"status": "ok", "service": "careeros-api", "version": "1.0.0"}
 
 
+@app.get("/health/db", tags=["Health"])
+async def health_db():
+    """Public: tests Supabase connectivity without auth."""
+    from app.core.database import supabase
+    try:
+        resp = supabase.table("users").select("id").limit(1).execute()
+        return {"db": "ok", "rows": len(resp.data or [])}
+    except Exception as e:
+        return {"db": "error", "detail": str(e)}
+
+
 @app.get("/dev/token", tags=["Dev"], include_in_schema=True,
          summary="[DEV ONLY] Get a fresh Clerk JWT for Swagger testing")
 async def dev_get_token():
