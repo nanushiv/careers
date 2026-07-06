@@ -192,17 +192,23 @@ async def list_analyses(
     if not user_resp.data:
         raise HTTPException(status_code=404, detail="User not found")
 
-    query = supabase.table("resume_analyses").select("*").eq(
-        "user_id", user_resp.data[0]["id"]
-    ).order("created_at", desc=True).limit(limit)
+    try:
+        query = supabase.table("resume_analyses").select(
+            "id, resume_id, user_id, analysis_type, overall_score, status, gaps, created_at"
+        ).eq(
+            "user_id", user_resp.data[0]["id"]
+        ).order("created_at", desc=True).limit(limit)
 
-    if resume_id:
-        query = query.eq("resume_id", resume_id)
-    if analysis_type:
-        query = query.eq("analysis_type", analysis_type)
+        if resume_id:
+            query = query.eq("resume_id", resume_id)
+        if analysis_type:
+            query = query.eq("analysis_type", analysis_type)
 
-    resp = query.execute()
-    return api_response(data=resp.data)
+        resp = query.execute()
+        return api_response(data=resp.data)
+    except Exception as e:
+        logger.error(f"list_analyses query failed: {e}")
+        return api_response(data=[])
 
 
 # ── Interview Questions ────────────────────────────────────────────────────────

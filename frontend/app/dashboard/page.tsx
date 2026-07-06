@@ -51,10 +51,8 @@ export default function DashboardPage() {
         setRetrying(false);
         return;
       }
-      const [resp, analysisResp] = await Promise.all([
-        api.getDashboard(token),
-        api.listAnalyses(token, { analysis_type: "ats" }),
-      ]);
+      const resp = await api.getDashboard(token);
+      const analysisResp = await api.listAnalyses(token, { analysis_type: "ats" }).catch(() => ({ data: [] as any[] }));
       if (analysisResp.data?.[0]) setLatestAnalysis(analysisResp.data[0]);
       if (resp.data) {
         setData(resp.data);
