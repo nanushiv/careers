@@ -154,6 +154,28 @@ async def trigger_analysis(
     })
 
 
+@router.get("/job/{job_id}")
+async def get_job_status(
+    job_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Poll job status — lets frontend detect failures immediately."""
+    user_resp = supabase.table("users").select("id").eq(
+        "clerk_id", current_user["clerk_id"]
+    ).execute()
+    if not user_resp.data:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    job = supabase.table("analysis_jobs").select("id, status, error, results").eq(
+        "id", job_id
+    ).eq("user_id", user_resp.data[0]["id"]).limit(1).execute()
+
+    if not job.data:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    return api_response(data=job.data[0])
+
+
 @router.get("/{analysis_id}")
 async def get_analysis(
     analysis_id: str,

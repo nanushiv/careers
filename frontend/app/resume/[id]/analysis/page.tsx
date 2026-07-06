@@ -54,6 +54,23 @@ export default function AnalysisResultsPage() {
       try {
         const token = await getToken();
         if (!token) { clearInterval(interval); setPolling(false); setLoading(false); return; }
+
+        // Check job status first — catches failures immediately
+        try {
+          const jobResp = await fetch(
+            `${process.env.NEXT_PUBLIC_API_URL}/analyses/job/${jobId}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const jobData = await jobResp.json();
+          if (jobData?.data?.status === "failed") {
+            clearInterval(interval);
+            setPolling(false);
+            setLoading(false);
+            setPollingError("Analysis failed — AI service is busy. Please try again in a minute.");
+            return;
+          }
+        } catch { /* job status check is best-effort */ }
+
         const resp = await api.listAnalyses(token, { resume_id: resumeId });
         if (resp.error) { clearInterval(interval); setPolling(false); setLoading(false); setPollingError("Failed to load analysis results."); return; }
         const real = (resp.data || []).filter(a => a.analysis_type !== "rewrite");
@@ -72,7 +89,7 @@ export default function AnalysisResultsPage() {
       }
     }, 3000);
 
-    setTimeout(() => { clearInterval(interval); setPolling(false); setLoading(false); setPollingError("Analysis is taking longer than expected. Please refresh."); }, 120000);
+    setTimeout(() => { clearInterval(interval); setPolling(false); setLoading(false); setPollingError("Analysis is taking longer than expected. Please try again."); }, 120000);
     return () => clearInterval(interval);
   }, [jobId]);
 
