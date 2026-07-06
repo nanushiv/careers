@@ -9,7 +9,7 @@ import {
   ArrowRight, Plus, Briefcase, FileText, Brain, Sparkles, X
 } from "lucide-react";
 import Link from "next/link";
-import { api, DashboardData } from "@/lib/api";
+import { api, DashboardData, ApiError } from "@/lib/api";
 import { CareerHealthGauge } from "@/components/dashboard/CareerHealthGauge";
 import { InsightCard } from "@/components/dashboard/InsightCard";
 import { PipelineMini } from "@/components/dashboard/PipelineMini";
@@ -45,7 +45,12 @@ export default function DashboardPage() {
     try {
       if (isRetry) setRetrying(true);
       const token = await getToken();
-      if (!token) return;
+      if (!token) {
+        setError("Session expired — please sign out and sign back in.");
+        setLoading(false);
+        setRetrying(false);
+        return;
+      }
       const [resp, analysisResp] = await Promise.all([
         api.getDashboard(token),
         api.listAnalyses(token, { analysis_type: "ats" }),
@@ -59,16 +64,33 @@ export default function DashboardPage() {
       setLoading(false);
       setRetrying(false);
     } catch (e) {
+      console.error("Dashboard load error:", e);
+      if (e instanceof ApiError) {
+        if (e.status === 404) {
+          router.replace("/onboarding");
+          return;
+        }
+        if (e.status === 401) {
+          setError("Session expired — please sign out and sign back in.");
+          setLoading(false);
+          setRetrying(false);
+          return;
+        }
+        setError(`Error ${e.status}: ${e.message}`);
+        setLoading(false);
+        setRetrying(false);
+        return;
+      }
       const msg = e instanceof Error ? e.message : String(e);
-      const isNetwork = msg.toLowerCase().includes("load") || msg.toLowerCase().includes("fetch") || msg.toLowerCase().includes("network");
+      const isAborted = msg.toLowerCase().includes("abort") || msg.toLowerCase().includes("timeout");
+      const isNetwork = isAborted || msg.toLowerCase().includes("load") || msg.toLowerCase().includes("fetch") || msg.toLowerCase().includes("network");
       if (isNetwork && attempt < 4) {
         setTimeout(() => load(false, attempt + 1), attempt * 2000);
         return;
       }
-      setError(isNetwork ? "Server is taking too long — please tap Retry." : "Failed to load dashboard");
+      setError(isNetwork ? "Server is not responding — please tap Retry." : msg);
       setLoading(false);
       setRetrying(false);
-      console.error(e);
     }
   };
 
@@ -415,19 +437,25 @@ function DashboardSkeleton() {
 }
 
 function ErrorState({ message, onRetry, retrying }: { message: string; onRetry: () => void; retrying: boolean }) {
+  const isNetworkError = message.toLowerCase().includes("not responding") || message.toLowerCase().includes("waking");
+  const isAuthError = message.toLowerCase().includes("session expired") || message.toLowerCase().includes("sign out");
   return (
     <div className="flex items-center justify-center h-64">
       <div className="text-center">
         <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
         <p className="text-gray-400 mb-1">{message}</p>
-        <p className="text-xs text-gray-600 mb-4">The server may be waking up — this can take ~30 seconds.</p>
-        <button
-          onClick={onRetry}
-          disabled={retrying}
-          className="px-4 py-2 text-sm bg-violet-600 hover:bg-violet-500 text-white rounded-lg transition-colors disabled:opacity-50"
-        >
-          {retrying ? "Retrying..." : "Retry"}
-        </button>
+        {isNetworkError && (
+          <p className="text-xs text-gray-600 mb-4">The server may be waking up — this can take ~30 seconds.</p>
+        )}
+        {!isAuthError && (
+          <button
+            onClick={onRetry}
+            disabled={retrying}
+            className="px-4 py-2 text-sm bg-violet-600 hover:bg-violet-500 text-white rounded-lg transition-colors disabled:opacity-50 mt-4"
+          >
+            {retrying ? "Retrying..." : "Retry"}
+          </button>
+        )}
       </div>
     </div>
   );
