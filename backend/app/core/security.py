@@ -25,13 +25,13 @@ def verify_clerk_token(token: str) -> dict:
     """Verify a Clerk JWT and return the payload."""
     try:
         jwks = get_jwks()
-        # Decode header to get kid
+        keys = jwks.get("keys")
+        if not keys:
+            logger.error(f"JWKS response missing 'keys' field: {list(jwks.keys())}")
+            raise HTTPException(status_code=401, detail="Auth service unavailable")
+
         header = jwt.get_unverified_header(token)
-        # Find matching key
-        key = next(
-            (k for k in jwks["keys"] if k["kid"] == header["kid"]),
-            None
-        )
+        key = next((k for k in keys if k["kid"] == header["kid"]), None)
         if not key:
             raise HTTPException(status_code=401, detail="Invalid token key")
 
@@ -42,8 +42,13 @@ def verify_clerk_token(token: str) -> dict:
             options={"verify_aud": False},
         )
         return payload
+    except HTTPException:
+        raise
     except JWTError as e:
         logger.warning(f"JWT verification failed: {e}")
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    except Exception as e:
+        logger.error(f"Unexpected error in token verification: {type(e).__name__}: {e}")
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 
