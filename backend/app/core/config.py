@@ -63,6 +63,7 @@ class Settings(BaseSettings):
 
     # Admin
     ADMIN_EMAILS: str = "shivani27chaudhary@gmail.com"
+    ADMIN_CRON_SECRET: str = ""   # Set on Render; used by cron-job.org to trigger scheduled tasks
     BYPASS_PRO_GATE: bool = False
 
     # Analytics
