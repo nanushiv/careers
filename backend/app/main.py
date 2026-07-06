@@ -35,30 +35,7 @@ async def lifespan(app: FastAPI):
             logger.warning("RAZORPAY_WEBHOOK_SECRET is not set — Razorpay webhooks will be rejected")
     await init_db()
     await init_cache()
-
-    from apscheduler.schedulers.background import BackgroundScheduler
-    from apscheduler.triggers.cron import CronTrigger
-    from app.workers.insight_worker import (
-        _send_digests, _send_follow_ups, _send_resume_fix_reminders,
-        _detect_ghosting, _generate_all_insights,
-    )
-    import asyncio
-
-    def run(coro_fn):
-        asyncio.run(coro_fn())
-
-    scheduler = BackgroundScheduler(timezone="UTC")
-    scheduler.add_job(lambda: run(_send_digests),              CronTrigger(day_of_week="mon", hour=9,  minute=0))
-    scheduler.add_job(lambda: run(_generate_all_insights),     CronTrigger(day_of_week="sun", hour=8,  minute=0))
-    scheduler.add_job(lambda: run(_send_follow_ups),           CronTrigger(hour=8,  minute=0))
-    scheduler.add_job(lambda: run(_send_resume_fix_reminders), CronTrigger(hour=10, minute=0))
-    scheduler.add_job(lambda: run(_detect_ghosting),           CronTrigger(hour=6,  minute=0))
-    scheduler.start()
-    logger.info("Background scheduler started")
-
     yield
-
-    scheduler.shutdown(wait=False)
     logger.info("CareerOS API shutting down...")
 
 
