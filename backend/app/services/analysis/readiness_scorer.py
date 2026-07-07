@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 
 class ReadinessResult:
     def __init__(self):
+        self.role_detected: str = "PM"
+        self.role_label: str = "Product Manager"
         self.overall_readiness_score: float = 0.0
         self.readiness_level: str = "developing"
         self.dimensions: dict = {}
@@ -70,6 +72,8 @@ class ReadinessScorer:
             llm_resp = await llm_client.complete(prompt, model=model, max_tokens=2500)
             data = llm_resp.as_json()
 
+            result.role_detected = data.get("role_detected", "PM")
+            result.role_label = data.get("role_label", "Product Manager")
             result.overall_readiness_score = data.get("overall_readiness_score", 50)
             result.readiness_level = data.get("readiness_level", "developing")
             result.dimensions = data.get("dimensions", {})

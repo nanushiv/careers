@@ -160,6 +160,7 @@ export default function AnalysisResultsPage() {
   const recruiter = getAnalysis("recruiter");
   const readiness = getAnalysis("readiness");
   const roleFit = getAnalysis("role_fit");
+  const readinessLabel = ((readiness as any)?.readiness_breakdown?.role_label ?? "PM") + " Readiness";
 
   // Only count real analyses (exclude rewrite metadata records)
   const realCount = analyses.filter(a => a.analysis_type !== "rewrite").length;
@@ -167,7 +168,7 @@ export default function AnalysisResultsPage() {
   const TABS = [
     { id: "ats" as const, label: "ATS Score", icon: CheckCircle2, available: !!ats },
     { id: "recruiter" as const, label: "Recruiter View", icon: Brain, available: !!recruiter },
-    { id: "readiness" as const, label: "PM Readiness", icon: TrendingUp, available: !!readiness },
+    { id: "readiness" as const, label: readinessLabel, icon: TrendingUp, available: !!readiness },
     { id: "role_fit" as const, label: "Role Fit", icon: Target, available: !!roleFit },
     { id: "roadmap" as const, label: "Roadmap", icon: AlertTriangle, available: !!ats },
   ];
@@ -217,7 +218,7 @@ export default function AnalysisResultsPage() {
       <div className={`grid gap-4 mb-6 ${roleFit ? "grid-cols-4" : "grid-cols-3"}`}>
         {ats && <ScorePill label="ATS Score" score={ats.overall_score} />}
         {recruiter && <ScorePill label="Recruiter Score" score={recruiter.overall_score} />}
-        {readiness && <ScorePill label="PM Readiness" score={readiness.overall_score} />}
+        {readiness && <ScorePill label={readinessLabel} score={readiness.overall_score} />}
         {roleFit && <ScorePill label="Role Fit" score={roleFit.overall_score} />}
       </div>
 
@@ -310,6 +311,7 @@ function ScorePill({ label, score }: { label: string; score?: number | null }) {
 function ReadinessPanel({ analysis }: { analysis: Analysis }) {
   const data = (analysis as any).readiness_breakdown || {};
   const dims = data.dimensions || {};
+  const panelLabel = data.role_label ? `${data.role_label} Readiness` : "Readiness";
 
   if (Object.keys(dims).length === 0) {
     return (
@@ -328,7 +330,7 @@ function ReadinessPanel({ analysis }: { analysis: Analysis }) {
         {data.positioning_narrative && (
           <p className="text-sm text-gray-300 italic mb-4 pb-4 border-b border-gray-800">"{data.positioning_narrative}"</p>
         )}
-        <h3 className="font-semibold text-white mb-4">Readiness Dimensions</h3>
+        <h3 className="font-semibold text-white mb-4">{panelLabel} Dimensions</h3>
         <div className="space-y-4">
           {Object.entries(dims).map(([dim, d]: [string, any]) => (
             <div key={dim}>

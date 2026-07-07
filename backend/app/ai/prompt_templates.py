@@ -131,6 +131,8 @@ Evaluate PM readiness across these dimensions with honest, specific assessment:
 
 Return JSON only:
 {{
+  "role_detected": "PM",
+  "role_label": "Product Manager",
   "overall_readiness_score": 0-100,
   "readiness_level": "not_ready|developing|ready|strong",
   "dimensions": {{
@@ -174,6 +176,50 @@ Return JSON only:
   "positioning_narrative": "How should this person pitch themselves as a PM candidate?",
   "critical_missing_experiences": ["top 3 things missing"],
   "quick_wins_30_days": ["achievable actions in 30 days"],
+  "estimated_readiness_timeline": "Now|3 months|6 months|12 months"
+}}
+""",
+
+    # ── Universal Role-Aware Readiness ────────────────────────────────────────
+    "universal_readiness_v1": """
+You are an expert career coach evaluating a candidate's professional readiness.
+
+CANDIDATE RESUME:
+{resume_text}
+
+Your task:
+1. Detect the candidate's primary career domain from their resume
+2. Evaluate their readiness to advance or transition in that domain
+
+ROLE DETECTION: Choose from PM (Product Manager), SWE (Software Engineer), Data (Data Scientist/Analyst), Architect (Solution/Cloud/Enterprise Architect), Design (UX/UI/Product Designer), Marketing (Growth/Brand/Performance Marketing), Finance (Financial Analyst/Accountant), Operations (Operations/Supply Chain/Project Management), Other.
+
+DIMENSIONS: Choose 6 dimensions most critical for the detected domain. Examples by role:
+- PM: product_thinking, technical_credibility, data_and_analytics, stakeholder_influence, delivery_and_execution, ai_ml_fluency
+- SWE: technical_depth, system_design, code_quality_and_practices, problem_solving, engineering_impact, collaboration
+- Data: statistical_modeling, data_engineering, business_acumen, ml_and_ai, data_visualization, analytical_communication
+- Architect: solution_design, technical_breadth, cloud_and_infrastructure, stakeholder_alignment, enterprise_patterns, delivery_oversight
+- Design: ux_research, visual_design, product_thinking, user_empathy, design_systems, stakeholder_communication
+- Marketing: growth_strategy, campaign_execution, data_and_analytics, brand_positioning, channel_expertise, cross_functional_influence
+- Finance: financial_modeling, business_acumen, risk_analysis, regulatory_knowledge, data_proficiency, stakeholder_communication
+- Operations: process_optimization, project_delivery, cross_functional_coordination, data_driven_decision_making, stakeholder_management, change_management
+
+Return JSON only:
+{{
+  "role_detected": "PM|SWE|Data|Architect|Design|Marketing|Finance|Operations|Other",
+  "role_label": "Product Manager|Software Engineer|Data Scientist|Solution Architect|UX Designer|Marketing Specialist|Financial Analyst|Operations Manager|Professional",
+  "overall_readiness_score": 0-100,
+  "readiness_level": "not_ready|developing|ready|strong",
+  "dimensions": {{
+    "<dimension_key>": {{
+      "score": 0-100,
+      "evidence_found": ["specific signals from resume"],
+      "gaps": ["what's missing for advancement"],
+      "development_actions": ["specific actionable steps"]
+    }}
+  }},
+  "positioning_narrative": "How should this person pitch themselves for their next career move?",
+  "critical_missing_experiences": ["top 3 experience gaps blocking advancement"],
+  "quick_wins_30_days": ["3-5 achievable actions in the next 30 days"],
   "estimated_readiness_timeline": "Now|3 months|6 months|12 months"
 }}
 """,
@@ -295,7 +341,7 @@ ACTIVE_VERSIONS = {
     "ats": "ats_enrichment_v1",
     "recruiter": "recruiter_perception_v2",
     "role_fit": "role_fit_enrichment_v1",
-    "readiness": "pm_readiness_v1",
+    "readiness": "universal_readiness_v1",
     "interview_questions": "interview_questions_v2",
     "weekly_synthesis": "weekly_synthesis_v1",
     "rewrite": "resume_rewrite_v1",

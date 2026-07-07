@@ -414,6 +414,8 @@ async def run_analyses_background(
                         "overall_score": result.overall_readiness_score,
                         # Nest all readiness data under readiness_breakdown (what the frontend reads)
                         "readiness_breakdown": {
+                            "role_detected": d.get("role_detected", "PM"),
+                            "role_label": d.get("role_label", "Product Manager"),
                             "overall_readiness_score": d.get("overall_readiness_score"),
                             "readiness_level": d.get("readiness_level"),
                             "dimensions": d.get("dimensions", {}),
