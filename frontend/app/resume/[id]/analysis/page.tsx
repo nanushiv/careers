@@ -69,7 +69,9 @@ export default function AnalysisResultsPage() {
             const err = jobData?.data?.error || "";
             const msg = err.includes("restarted")
               ? "The server restarted mid-analysis. Please go back and run a fresh analysis."
-              : "Analysis failed — AI service is busy. Please try again in a minute.";
+              : err.includes("quota") || err.includes("AI quota")
+              ? "Daily AI quota reached — resets at ~12:30 PM IST. Please try again tomorrow."
+              : "Analysis failed. Please try again in a minute.";
             setPollingError(msg);
             return;
           }

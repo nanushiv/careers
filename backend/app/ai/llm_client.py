@@ -107,7 +107,7 @@ class LLMClient:
         for attempt in range(4):  # up to 3 retries
             if attempt > 0:
                 wait = 2 ** attempt  # 2s, 4s, 8s
-                logger.warning(f"Gemini 429 rate limit — retrying in {wait}s (attempt {attempt+1}/4)")
+                logger.warning(f"Gemini rate limit — retrying in {wait}s (attempt {attempt+1}/4)")
                 await asyncio.sleep(wait)
             try:
                 response = await asyncio.wait_for(
@@ -131,7 +131,14 @@ class LLMClient:
                     tokens = len(text.split()) * 2
                 return {"text": text, "tokens": tokens}
             except Exception as e:
-                if "429" in str(e) or "quota" in str(e).lower() or "rate" in str(e).lower():
+                err_str = str(e)
+                # Daily quota exhausted — retrying won't help, fail immediately
+                if "exceeded your current quota" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                    raise RuntimeError(
+                        "GEMINI_QUOTA_EXCEEDED: Daily AI quota reached. Resets at midnight PT (~12:30 PM IST). Try again tomorrow or enable billing at https://ai.google.dev"
+                    ) from e
+                # Per-minute rate limit — retry with backoff
+                if "429" in err_str or "rate" in err_str.lower():
                     last_exc = e
                     continue
                 raise

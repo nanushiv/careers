@@ -493,9 +493,16 @@ async def run_analyses_background(
         # Fix #4: if every analysis failed, mark job as failed so frontend stops polling
         successful = [r for r in results if "id" in r]
         if not successful:
+            errors = [r.get("error", "") for r in results if "error" in r]
+            is_quota = any("GEMINI_QUOTA_EXCEEDED" in e for e in errors)
+            fail_msg = (
+                "AI quota exhausted for today. Resets at ~12:30 PM IST. Please try again tomorrow."
+                if is_quota else
+                "All analyses failed. Please try again in a minute."
+            )
             supabase.table("analysis_jobs").update({
                 "status": "failed",
-                "error": "All analyses failed. Check backend logs.",
+                "error": fail_msg,
                 "results": results,
             }).eq("id", job_id).execute()
         else:
