@@ -215,9 +215,7 @@ async def list_analyses(
         raise HTTPException(status_code=404, detail="User not found")
 
     try:
-        query = supabase.table("resume_analyses").select(
-            "id, resume_id, user_id, analysis_type, overall_score, status, gaps, created_at"
-        ).eq(
+        query = supabase.table("resume_analyses").select("*").eq(
             "user_id", user_resp.data[0]["id"]
         ).order("created_at", desc=True).limit(limit)
 

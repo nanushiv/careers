@@ -35,8 +35,25 @@ async def lifespan(app: FastAPI):
             logger.warning("RAZORPAY_WEBHOOK_SECRET is not set — Razorpay webhooks will be rejected")
     await init_db()
     await init_cache()
+    _cleanup_stale_jobs()
     yield
     logger.info("CareerOS API shutting down...")
+
+
+def _cleanup_stale_jobs():
+    """Mark any jobs stuck in queued/processing as failed.
+    Runs at startup so a Render redeploy doesn't leave users with infinite spinners."""
+    try:
+        from app.core.database import supabase
+        result = supabase.table("analysis_jobs").update({
+            "status": "failed",
+            "error": "Server restarted mid-analysis. Please re-run your analysis.",
+        }).in_("status", ["queued", "processing"]).execute()
+        count = len(result.data) if result.data else 0
+        if count:
+            logger.info(f"Startup cleanup: marked {count} stale job(s) as failed")
+    except Exception as e:
+        logger.warning(f"Startup job cleanup failed (non-critical): {e}")
 
 
 DESCRIPTION = """

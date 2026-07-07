@@ -66,7 +66,11 @@ export default function AnalysisResultsPage() {
             clearInterval(interval);
             setPolling(false);
             setLoading(false);
-            setPollingError("Analysis failed — AI service is busy. Please try again in a minute.");
+            const err = jobData?.data?.error || "";
+            const msg = err.includes("restarted")
+              ? "The server restarted mid-analysis. Please go back and run a fresh analysis."
+              : "Analysis failed — AI service is busy. Please try again in a minute.";
+            setPollingError(msg);
             return;
           }
         } catch { /* job status check is best-effort */ }
