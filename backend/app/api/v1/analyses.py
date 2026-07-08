@@ -2,7 +2,8 @@
 Analyses API — trigger AI analyses and retrieve results.
 Analysis jobs are async: trigger returns job_id, poll for completion.
 """
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional, List
 import uuid
@@ -518,3 +519,86 @@ async def run_analyses_background(
             "status": "failed",
             "error": str(e),
         }).eq("id", job_id).execute()
+
+
+# ── Download Proxy ────────────────────────────────────────────────────────────
+
+async def _fetch_r2_or_local(url: str) -> bytes:
+    """Fetch file bytes — from R2 via boto3 (private bucket) or local filesystem."""
+    from app.core.config import settings
+
+    if (settings.R2_ACCOUNT_ID and settings.R2_ACCESS_KEY_ID
+            and settings.R2_SECRET_ACCESS_KEY and settings.R2_PUBLIC_URL
+            and url.startswith(settings.R2_PUBLIC_URL)):
+        import boto3
+        key = url[len(settings.R2_PUBLIC_URL):].lstrip("/")
+        s3 = boto3.client(
+            "s3",
+            endpoint_url=f"https://{settings.R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
+            aws_access_key_id=settings.R2_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.R2_SECRET_ACCESS_KEY,
+        )
+        obj = s3.get_object(Bucket=settings.R2_BUCKET_NAME, Key=key)
+        return obj["Body"].read()
+
+    if "/files/" in url:
+        import os
+        rel = url.split("/files/", 1)[1]
+        local_path = os.path.join(os.path.dirname(__file__), "../../../../local_files", rel)
+        with open(local_path, "rb") as f:
+            return f.read()
+
+    raise HTTPException(status_code=502, detail="Cannot fetch file from storage")
+
+
+@router.get("/{resume_id}/download")
+async def download_improved_resume(
+    resume_id: str,
+    file_type: str = Query("docx"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Proxy-download the improved resume DOCX or PDF through the backend (avoids R2 CORS/public-access issues)."""
+    if file_type not in ("docx", "pdf"):
+        raise HTTPException(status_code=400, detail="file_type must be docx or pdf")
+
+    user_resp = supabase.table("users").select("id").eq(
+        "clerk_id", current_user["clerk_id"]
+    ).execute()
+    if not user_resp.data:
+        raise HTTPException(status_code=404, detail="User not found")
+    user = user_resp.data[0]
+
+    rewrite_resp = supabase.table("resume_analyses").select(
+        "improved_resume_url, improved_pdf_url, rewrite_status"
+    ).eq("resume_id", resume_id).eq("user_id", user["id"]).eq(
+        "analysis_type", "rewrite"
+    ).order("created_at", desc=True).limit(1).execute()
+
+    if not rewrite_resp.data:
+        raise HTTPException(status_code=404, detail="No improved resume found. Generate one first.")
+
+    rewrite = rewrite_resp.data[0]
+    if rewrite.get("rewrite_status") != "completed":
+        raise HTTPException(status_code=400, detail="Improved resume is not ready yet.")
+
+    url = rewrite["improved_resume_url"] if file_type == "docx" else rewrite.get("improved_pdf_url")
+    if not url:
+        raise HTTPException(status_code=404, detail=f"{file_type.upper()} file not available")
+
+    try:
+        content = await _fetch_r2_or_local(url)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to fetch improved resume for {resume_id}: {e}")
+        raise HTTPException(status_code=502, detail="Failed to retrieve file from storage")
+
+    media_type = (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        if file_type == "docx" else "application/pdf"
+    )
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="improved-resume.{file_type}"'},
+    )

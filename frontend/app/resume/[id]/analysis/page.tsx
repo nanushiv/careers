@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useParams, useSearchParams } from "next/navigation";
-import { Brain, Loader2, CheckCircle2, AlertTriangle, TrendingUp, ArrowLeft, Sparkles, Download, Lock, Target } from "lucide-react";
+import { Brain, Loader2, CheckCircle2, AlertTriangle, TrendingUp, ArrowLeft, Sparkles, Download, Target } from "lucide-react";
 import Link from "next/link";
 import { api, Analysis } from "@/lib/api";
 import { ATSScoreCard } from "@/components/analysis/ATSScoreCard";
@@ -28,9 +28,15 @@ export default function AnalysisResultsPage() {
   const [improvedPdfUrl, setImprovedPdfUrl] = useState<string | null>(null);
   const [projectedAtsScore, setProjectedAtsScore] = useState<number | null>(null);
 
-  const downloadFile = async (url: string, filename: string) => {
+  const downloadFile = async (_url: string, filename: string) => {
+    const token = await getToken();
+    if (!token) return;
+    const ext = filename.endsWith(".pdf") ? "pdf" : "docx";
     try {
-      const res = await fetch(url);
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/analyses/${resumeId}/download?file_type=${ext}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       const objectUrl = URL.createObjectURL(blob);
@@ -42,8 +48,7 @@ export default function AnalysisResultsPage() {
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     } catch {
-      // CORS or network error — fallback to opening directly
-      window.open(url, "_blank");
+      alert("Download failed. Please try again.");
     }
   };
 
@@ -139,7 +144,6 @@ export default function AnalysisResultsPage() {
   };
 
   const handleDownloadImproved = async () => {
-    if (userPlan === "free") { window.location.href = "/pricing"; return; }
     setRewriteStatus("loading");
     try {
       const token = await getToken();
@@ -275,16 +279,11 @@ export default function AnalysisResultsPage() {
             className="flex items-center gap-2 px-4 py-2 bg-red-600/30 hover:bg-red-600/50 text-red-300 text-sm font-medium rounded-xl border border-red-500/30 transition-colors shrink-0">
             Failed — try again
           </button>
-        ) : userPlan !== "free" ? (
+        ) : (
           <button onClick={handleDownloadImproved}
             className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-xl transition-colors shrink-0">
             <Sparkles className="w-4 h-4" /> Generate Improved Resume
           </button>
-        ) : (
-          <Link href="/pricing"
-            className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-violet-300 text-sm font-medium rounded-xl border border-violet-500/30 transition-colors shrink-0">
-            <Lock className="w-4 h-4" /> Pro Only — Upgrade
-          </Link>
         )}
       </div>
 
