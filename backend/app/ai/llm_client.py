@@ -17,14 +17,14 @@ logger = logging.getLogger(__name__)
 genai.configure(api_key=settings.GEMINI_API_KEY)
 
 Model = Literal[
-    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
     "mistralai/mistral-7b-instruct",
     "openai/gpt-4o-mini",
 ]
 
 # Cost per 1k tokens (input/output average)
 MODEL_COSTS = {
-    "gemini-2.5-flash-lite": 0.0001,
+    "gemini-2.5-flash": 0.0001,
     "mistralai/mistral-7b-instruct": 0.0002,
     "openai/gpt-4o-mini": 0.00015,
 }
@@ -58,14 +58,14 @@ class LLMResponse:
 
 class LLMClient:
     def __init__(self):
-        self.gemini_flash = genai.GenerativeModel("gemini-2.5-flash-lite")
-        self.gemini_pro = genai.GenerativeModel("gemini-2.5-flash-lite")
+        self.gemini_flash = genai.GenerativeModel("gemini-2.5-flash")
+        self.gemini_pro = genai.GenerativeModel("gemini-2.5-flash")
 
     async def complete(
         self,
         prompt: str,
-        model: Model = "gemini-2.5-flash-lite",
-        max_tokens: int = 2048,
+        model: Model = "gemini-2.5-flash",
+        max_tokens: int = 8192,
         temperature: float = 0.3,
         json_mode: bool = True,
     ) -> LLMResponse:

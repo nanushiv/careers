@@ -69,7 +69,7 @@ class ReadinessScorer:
         )
 
         try:
-            llm_resp = await llm_client.complete(prompt, model=model, max_tokens=2500)
+            llm_resp = await llm_client.complete(prompt, model=model, max_tokens=8192)
             data = llm_resp.as_json()
 
             result.role_detected = data.get("role_detected", "PM")
