@@ -110,7 +110,7 @@ class RecruiterAnalyzer:
 
         except Exception as e:
             logger.error(f"Recruiter perception analysis failed: {e}")
-            result.first_impression = "Analysis temporarily unavailable. Please try again."
+            raise
 
         # ── Cache ──────────────────────────────────────────────────────────────
         if resume_id and not result.blocked:
