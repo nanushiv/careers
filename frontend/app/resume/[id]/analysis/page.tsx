@@ -50,10 +50,20 @@ export default function AnalysisResultsPage() {
   useEffect(() => {
     if (!jobId) { loadAnalyses(); return; }
 
+    let timeout: ReturnType<typeof setTimeout>;
+
+    const stop = (err?: string) => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+      setPolling(false);
+      setLoading(false);
+      if (err) setPollingError(err);
+    };
+
     const interval = setInterval(async () => {
       try {
         const token = await getToken();
-        if (!token) { clearInterval(interval); setPolling(false); setLoading(false); return; }
+        if (!token) { stop(); return; }
 
         // Check job status first — catches failures immediately
         try {
@@ -63,40 +73,32 @@ export default function AnalysisResultsPage() {
           );
           const jobData = await jobResp.json();
           if (jobData?.data?.status === "failed") {
-            clearInterval(interval);
-            setPolling(false);
-            setLoading(false);
             const err = jobData?.data?.error || "";
             const msg = err.includes("restarted")
               ? "The server restarted mid-analysis. Please go back and run a fresh analysis."
               : err.includes("quota") || err.includes("AI quota")
               ? "Daily AI quota reached — resets at ~12:30 PM IST. Please try again tomorrow."
               : "Analysis failed. Please try again in a minute.";
-            setPollingError(msg);
+            stop(msg);
             return;
           }
         } catch { /* job status check is best-effort */ }
 
         const resp = await api.listAnalyses(token, { resume_id: resumeId });
-        if (resp.error) { clearInterval(interval); setPolling(false); setLoading(false); setPollingError("Failed to load analysis results."); return; }
+        if (resp.error) { stop("Failed to load analysis results."); return; }
         const real = (resp.data || []).filter(a => a.analysis_type !== "rewrite");
         if (real.length > 0) {
           setAnalyses(resp.data || []);
           checkRewriteRecord(resp.data || []);
-          setPolling(false);
-          setLoading(false);
-          clearInterval(interval);
+          stop();
         }
       } catch {
-        clearInterval(interval);
-        setPolling(false);
-        setLoading(false);
-        setPollingError("Connection error. Please refresh.");
+        stop("Connection error. Please refresh.");
       }
     }, 3000);
 
-    setTimeout(() => { clearInterval(interval); setPolling(false); setLoading(false); setPollingError("Analysis is taking longer than expected. Please try again."); }, 120000);
-    return () => clearInterval(interval);
+    timeout = setTimeout(() => stop("Analysis is taking longer than expected. Please try again."), 120000);
+    return () => { clearInterval(interval); clearTimeout(timeout); };
   }, [jobId]);
 
   const loadAnalyses = async () => {
