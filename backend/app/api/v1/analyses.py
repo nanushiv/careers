@@ -598,7 +598,7 @@ async def download_improved_resume(
         raise
     except Exception as e:
         logger.error(f"Failed to fetch improved resume for {resume_id}: {e}")
-        raise HTTPException(status_code=502, detail="Failed to retrieve file from storage")
+        raise HTTPException(status_code=502, detail=f"Storage error: {e} | url={url}")
 
     media_type = (
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
