@@ -307,12 +307,15 @@ class JobSuggestionsService:
                 try:
                     r = await client.get(
                         "https://remotive.com/api/remote-jobs",
-                        params={"category": "product", "limit": 100},
+                        params={"limit": 100},
                     )
                     return ("remotive", r.json().get("jobs", []) if r.status_code == 200 else [])
                 except Exception as e:
                     logger.warning(f"Remotive fetch failed: {e}")
                     return ("remotive", [])
+
+            # Build search queries from user's actual target roles (max 2)
+            search_roles = [r.lower() for r in (target_roles or ["product manager"])[:2]]
 
             # Build all tasks and run concurrently
             # Specific location → Adzuna only (country-specific jobs)
@@ -321,16 +324,12 @@ class JobSuggestionsService:
             if not is_worldwide_search:
                 # Location-specific search: only use Adzuna (real country jobs)
                 if adzuna_country and ADZUNA_APP_ID and ADZUNA_APP_KEY:
-                    tasks += [fetch_adzuna("product manager"), fetch_adzuna("senior product manager")]
+                    tasks += [fetch_adzuna(role) for role in search_roles]
                 # No Jobicy/Remotive — they are remote-only boards and pollute results
             else:
                 # Remote/worldwide search: use remote boards only
-                tasks += [
-                    fetch_jobicy("product manager"),
-                    fetch_jobicy("product management"),
-                    fetch_jobicy("senior product manager"),
-                    fetch_remotive(),
-                ]
+                tasks += [fetch_jobicy(role) for role in search_roles]
+                tasks.append(fetch_remotive())
             results = await asyncio.gather(*tasks)
 
             # Merge results
@@ -372,10 +371,10 @@ class JobSuggestionsService:
         if not normalized:
             return {"jobs": [], "location_note": location_note}
 
-        # Filter to PM-relevant titles
+        # Filter to titles matching user's target roles
         relevant = [j for j in normalized if _title_matches_target(j["title"], target_roles)]
         if len(relevant) < 5:
-            relevant = normalized[:40]
+            relevant = normalized[:40]  # fallback: show all fetched results ranked by score
 
         # Score and sort
         scored = []
