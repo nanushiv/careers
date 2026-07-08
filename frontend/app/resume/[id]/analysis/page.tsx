@@ -37,7 +37,10 @@ export default function AnalysisResultsPage() {
         `${process.env.NEXT_PUBLIC_API_URL}/analyses/${resumeId}/download?file_type=${ext}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(`HTTP ${res.status}: ${body}`);
+      }
       const blob = await res.blob();
       const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -47,8 +50,10 @@ export default function AnalysisResultsPage() {
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-    } catch {
-      alert("Download failed. Please try again.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("Download error:", msg);
+      alert(`Download failed: ${msg}`);
     }
   };
 
