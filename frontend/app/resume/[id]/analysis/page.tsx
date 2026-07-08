@@ -37,9 +37,15 @@ export default function AnalysisResultsPage() {
         `${process.env.NEXT_PUBLIC_API_URL}/analyses/${resumeId}/download?file_type=${ext}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      if (res.status === 410) {
+        // Stale local file — server reset the record, show Generate button again
+        setRewriteStatus("idle");
+        setImprovedResumeUrl(null);
+        setImprovedPdfUrl(null);
+        return;
+      }
       if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        throw new Error(`HTTP ${res.status}: ${body}`);
+        throw new Error(`HTTP ${res.status}`);
       }
       const blob = await res.blob();
       const objectUrl = URL.createObjectURL(blob);
@@ -53,7 +59,7 @@ export default function AnalysisResultsPage() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("Download error:", msg);
-      alert(`Download failed: ${msg}`);
+      alert("Download failed. Please try again.");
     }
   };
 

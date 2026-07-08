@@ -592,13 +592,21 @@ async def download_improved_resume(
     if not url:
         raise HTTPException(status_code=404, detail=f"{file_type.upper()} file not available")
 
+    # Stale local URL — file was saved to ephemeral server filesystem (R2 not configured at the time)
+    if "localhost" in url or (url.startswith("http") and "/files/" in url and "onrender.com" in url):
+        # Mark the rewrite record as failed so frontend shows "Generate" button again
+        supabase.table("resume_analyses").update({
+            "rewrite_status": "failed",
+        }).eq("resume_id", resume_id).eq("user_id", user["id"]).eq("analysis_type", "rewrite").execute()
+        raise HTTPException(status_code=410, detail="Improved resume expired (server restarted). Please generate it again.")
+
     try:
         content = await _fetch_r2_or_local(url)
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to fetch improved resume for {resume_id}: {e}")
-        raise HTTPException(status_code=502, detail=f"Storage error: {e} | url={url}")
+        raise HTTPException(status_code=502, detail="Failed to retrieve file from storage")
 
     media_type = (
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
