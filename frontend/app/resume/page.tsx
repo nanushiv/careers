@@ -158,7 +158,7 @@ export default function ResumePage() {
     try {
       const analysisTypes = jdText.trim()
         ? ["ats", "recruiter", "readiness", "role_fit"]
-        : ["recruiter", "readiness"];
+        : ["ats", "recruiter", "readiness"];
 
       const resp = await api.triggerAnalysis(token, {
         resume_id: jdModal.id,
