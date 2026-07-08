@@ -523,29 +523,27 @@ async def run_analyses_background(
 
 # ── Download Proxy ────────────────────────────────────────────────────────────
 
-async def _fetch_r2_or_local(url: str) -> bytes:
-    """Fetch file bytes — from R2 via boto3 or local filesystem."""
+async def _fetch_file(url: str) -> bytes:
+    """Fetch file bytes — from Supabase Storage, R2, or local filesystem."""
     import urllib.parse
     from app.core.config import settings
+    from app.core.database import supabase as _supabase
 
-    logger.info(f"Fetching file: {url}")
+    # Supabase Storage public URL
+    if ".supabase.co/storage/" in url:
+        parsed = urllib.parse.urlparse(url)
+        # URL: /storage/v1/object/public/{bucket}/{key}
+        path_parts = parsed.path.split("/storage/v1/object/public/", 1)
+        if len(path_parts) == 2:
+            bucket, key = path_parts[1].split("/", 1)
+            return bytes(_supabase.storage.from_(bucket).download(key))
+        raise HTTPException(status_code=502, detail="Cannot parse Supabase Storage URL")
 
-    # Local dev: URL contains /files/
-    if "/files/" in url:
-        import os
-        rel = url.split("/files/", 1)[1]
-        local_path = os.path.join(os.path.dirname(__file__), "../../../../local_files", rel)
-        with open(local_path, "rb") as f:
-            return f.read()
-
-    # R2: extract key from URL path (works regardless of R2_PUBLIC_URL value)
+    # R2: extract key from URL path
     if settings.R2_ACCOUNT_ID and settings.R2_ACCESS_KEY_ID and settings.R2_SECRET_ACCESS_KEY:
         import boto3
         parsed = urllib.parse.urlparse(url)
         key = parsed.path.lstrip("/")
-        if not key:
-            raise HTTPException(status_code=502, detail="Cannot extract file key from URL")
-        logger.info(f"Fetching R2 key: {key} from bucket: {settings.R2_BUCKET_NAME}")
         s3 = boto3.client(
             "s3",
             endpoint_url=f"https://{settings.R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
@@ -601,7 +599,7 @@ async def download_improved_resume(
         raise HTTPException(status_code=410, detail="Improved resume expired (server restarted). Please generate it again.")
 
     try:
-        content = await _fetch_r2_or_local(url)
+        content = await _fetch_file(url)
     except HTTPException:
         raise
     except Exception as e:

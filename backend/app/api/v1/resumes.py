@@ -298,10 +298,10 @@ async def run_rewrite_background(resume: dict, analyses: list, user_id: str, rec
 
 
 async def upload_to_r2(content: bytes, key: str, content_type: str) -> str:
-    """Upload file to Cloudflare R2, or save locally for dev. Returns public URL."""
+    """Upload file — R2 if configured, else Supabase Storage. Returns public URL."""
     from app.core.config import settings
 
-    # Use R2 when credentials are configured
+    # R2 (if configured)
     if settings.R2_ACCOUNT_ID and settings.R2_ACCESS_KEY_ID and settings.R2_SECRET_ACCESS_KEY:
         try:
             import boto3
@@ -319,17 +319,21 @@ async def upload_to_r2(content: bytes, key: str, content_type: str) -> str:
             )
             return f"{settings.R2_PUBLIC_URL}/{key}"
         except Exception as e:
-            logger.warning(f"R2 upload failed, falling back to local: {e}")
+            logger.warning(f"R2 upload failed, falling back to Supabase Storage: {e}")
 
-    # Local fallback: save to backend/local_files/
-    import os
-    # Prevent path traversal: strip any leading slashes and resolve only the basename
-    safe_key = os.path.normpath(key).lstrip("/\\")
-    if ".." in safe_key.split(os.sep):
-        raise ValueError(f"Unsafe file key rejected: {key}")
-    local_dir = os.path.join(os.path.dirname(__file__), "../../../../local_files", os.path.dirname(safe_key))
-    os.makedirs(local_dir, exist_ok=True)
-    local_path = os.path.join(os.path.dirname(__file__), "../../../../local_files", safe_key)
-    with open(local_path, "wb") as f:
-        f.write(content)
-    return f"{settings.API_BASE_URL}/files/{safe_key}"
+    # Supabase Storage fallback (persistent, no extra config needed)
+    try:
+        bucket = "improved-resumes"
+        try:
+            supabase.storage.create_bucket(bucket, options={"public": True})
+        except Exception:
+            pass  # bucket already exists
+        supabase.storage.from_(bucket).upload(
+            path=key,
+            file=content,
+            file_options={"content-type": content_type, "upsert": "true"},
+        )
+        return supabase.storage.from_(bucket).get_public_url(key)
+    except Exception as e:
+        logger.error(f"Supabase Storage upload failed: {e}")
+        raise RuntimeError(f"File upload failed: {e}")
