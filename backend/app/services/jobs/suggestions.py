@@ -192,13 +192,18 @@ ADZUNA_COUNTRY_LOCATION_KEYWORDS: dict[str, tuple] = {
 }
 
 
+def _word_match(key: str, text: str) -> bool:
+    """True if `key` appears as a whole word (or phrase) in `text`."""
+    return bool(re.search(r'\b' + re.escape(key) + r'\b', text))
+
+
 def _location_to_geo(location: str) -> Optional[str]:
     """Map free-text location to Jobicy geo slug. Returns None for Remote/Worldwide."""
     loc = location.lower().strip()
     if not loc or loc in ("remote", "worldwide", "anywhere", "global"):
         return None
     for key, val in GEO_MAP.items():
-        if key in loc:
+        if _word_match(key, loc):
             return val
     return None
 
@@ -209,11 +214,11 @@ def _location_to_adzuna_country(location: str) -> Optional[str]:
     if not loc or loc in ("remote", "worldwide", "anywhere", "global"):
         return None
     for key, val in ADZUNA_COUNTRY_MAP.items():
-        if key in loc:
+        if _word_match(key, loc):
             return val
     # Try city-to-country fallback
     for city, code in CITY_TO_ADZUNA.items():
-        if city in loc:
+        if _word_match(city, loc):
             return code
     return None
 
