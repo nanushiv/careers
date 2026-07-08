@@ -152,6 +152,45 @@ ADZUNA_COUNTRY_MAP = {
     "mexico": "mx",
 }
 
+# Major cities → Adzuna country code
+CITY_TO_ADZUNA = {
+    "london": "gb", "manchester": "gb", "birmingham": "gb", "glasgow": "gb",
+    "new york": "us", "san francisco": "us", "los angeles": "us", "chicago": "us",
+    "seattle": "us", "boston": "us", "austin": "us", "new york city": "us",
+    "nyc": "us", "sf": "us",
+    "toronto": "ca", "vancouver": "ca", "montreal": "ca",
+    "sydney": "au", "melbourne": "au", "brisbane": "au", "perth": "au",
+    "bangalore": "in", "bengaluru": "in", "mumbai": "in", "delhi": "in",
+    "hyderabad": "in", "pune": "in", "chennai": "in", "gurgaon": "in",
+    "berlin": "de", "munich": "de", "hamburg": "de", "frankfurt": "de",
+    "paris": "fr", "lyon": "fr",
+    "amsterdam": "nl", "rotterdam": "nl",
+    "dubai": "ae", "abu dhabi": "ae",
+}
+
+# Keywords in job location that indicate a job is truly in the given Adzuna country
+ADZUNA_COUNTRY_LOCATION_KEYWORDS: dict[str, tuple] = {
+    "au": ("australia", "sydney", "melbourne", "brisbane", "perth", "adelaide", "canberra", "queensland", "victoria", "nsw"),
+    "in": ("india", "bangalore", "bengaluru", "mumbai", "delhi", "hyderabad", "pune", "chennai", "gurgaon", "noida"),
+    "us": ("united states", "new york", "san francisco", "los angeles", "chicago", "boston", "austin", "seattle", "atlanta", "dallas", "denver", "remote", "usa"),
+    "gb": ("uk", "united kingdom", "london", "manchester", "birmingham", "england", "scotland", "wales", "remote"),
+    "ca": ("canada", "toronto", "vancouver", "montreal", "calgary", "ottawa", "remote"),
+    "de": ("germany", "berlin", "munich", "hamburg", "frankfurt", "cologne", "remote"),
+    "fr": ("france", "paris", "lyon", "marseille", "remote"),
+    "sg": ("singapore",),
+    "nl": ("netherlands", "amsterdam", "rotterdam", "remote"),
+    "br": ("brazil", "são paulo", "sao paulo", "rio", "remote"),
+    "nz": ("new zealand", "auckland", "wellington", "remote"),
+    "pl": ("poland", "warsaw", "krakow", "remote"),
+    "es": ("spain", "madrid", "barcelona", "remote"),
+    "it": ("italy", "rome", "milan", "remote"),
+    "at": ("austria", "vienna", "remote"),
+    "be": ("belgium", "brussels", "remote"),
+    "za": ("south africa", "johannesburg", "cape town", "remote"),
+    "mx": ("mexico", "mexico city", "remote"),
+    "ae": ("dubai", "abu dhabi", "uae", "remote"),
+}
+
 
 def _location_to_geo(location: str) -> Optional[str]:
     """Map free-text location to Jobicy geo slug. Returns None for Remote/Worldwide."""
@@ -172,7 +211,20 @@ def _location_to_adzuna_country(location: str) -> Optional[str]:
     for key, val in ADZUNA_COUNTRY_MAP.items():
         if key in loc:
             return val
+    # Try city-to-country fallback
+    for city, code in CITY_TO_ADZUNA.items():
+        if city in loc:
+            return code
     return None
+
+
+def _adzuna_job_in_country(job_location: str, adzuna_country: str) -> bool:
+    """Return True if Adzuna job's location is actually in the requested country or remote."""
+    jl = job_location.lower()
+    keywords = ADZUNA_COUNTRY_LOCATION_KEYWORDS.get(adzuna_country, ())
+    if not keywords:
+        return True  # Unknown country — let it through
+    return any(kw in jl for kw in keywords)
 
 
 def _job_location_matches(job_location: str, requested_location: str) -> bool:
@@ -289,11 +341,14 @@ class JobSuggestionsService:
                         n = _normalize_remotive(job)
                         is_geo = False
                     if n:
-                        # For specific location searches, filter remote boards to
-                        # only include worldwide/remote jobs or ones matching the country
-                        if not is_worldwide_search and not is_geo:
-                            if not _job_location_matches(n["location"], location_requested):
-                                continue
+                        if not is_worldwide_search:
+                            if is_geo and adzuna_country:
+                                # Filter Adzuna results: only keep jobs actually in the country or remote
+                                if not _adzuna_job_in_country(n["location"], adzuna_country):
+                                    continue
+                            elif not is_geo:
+                                if not _job_location_matches(n["location"], location_requested):
+                                    continue
                         k = f"{n['title'].lower()}|{n['company'].lower()}"
                         if k not in seen_keys:
                             seen_keys.add(k)
@@ -305,9 +360,9 @@ class JobSuggestionsService:
         location_note: Optional[str] = None
         if not is_worldwide_search:
             if not adzuna_country:
-                location_note = f"Job search for '{location_requested.title()}' is not supported yet. Try: India, UK, USA, Canada, Australia, Germany, Singapore."
+                location_note = f"'{location_requested.title()}' not recognized. Try a country name: India, UK, USA, Canada, Australia, Germany, Singapore. Or type 'Remote' for worldwide."
             elif len(normalized) == 0:
-                location_note = f"No PM jobs found in {location_requested.title()} right now. Try a broader location or check back later."
+                location_note = f"No PM jobs found in {location_requested.title()} right now. Try 'Remote' for worldwide jobs."
 
         if not normalized:
             return {"jobs": [], "location_note": location_note}
