@@ -30,7 +30,7 @@ async def send_follow_up_reminder(
               <p>You applied to <strong>{role_title}</strong> at <strong>{company_name}</strong>
               and it's time to check in.</p>
               {"<h3>Suggested Message</h3><blockquote>" + draft_message + "</blockquote>" if draft_message else ""}
-              <p><a href="https://careeros.ai/applications" style="background: #7c3aed; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none;">
+              <p><a href="{settings.FRONTEND_URL}/applications" style="background: #7c3aed; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none;">
                 View Application
               </a></p>
             </div>
@@ -122,7 +122,7 @@ async def send_analysis_complete(
               <p>Hi {user_name}, we've finished analyzing <strong>{resume_name}</strong>.</p>
               <p style="font-size: 48px; text-align: center; color: #7c3aed;">{ats_score}<span style="font-size:20px">/100</span></p>
               {"<p><strong>Top gap found:</strong> " + top_gap + "</p>" if top_gap else ""}
-              <p><a href="https://careeros.ai/resume" style="background: #7c3aed; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none;">
+              <p><a href="{settings.FRONTEND_URL}/resume" style="background: #7c3aed; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none;">
                 View Full Analysis
               </a></p>
             </div>
@@ -153,13 +153,13 @@ async def send_resume_fix_reminder(
               <p>Here are the top 3 gaps recruiters are seeing:</p>
               <ul style="color:#d1d5db;">{gaps_html}</ul>
               <p>These are quick fixes — most take under 20 minutes.</p>
-              <a href="https://careeros.ai/resume/{resume_id}/analysis"
+              <a href="{settings.FRONTEND_URL}/resume/{resume_id}/analysis"
                 style="display:inline-block;background:#7c3aed;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:8px;">
                 View Full Analysis & Fix Guide →
               </a>
               <p style="color:#6b7280;font-size:12px;margin-top:24px;">
                 Once you update your resume, re-upload it to see your new score.
-                <a href="https://careeros.ai/unsubscribe" style="color:#6b7280;">Unsubscribe</a>
+                <a href="{settings.FRONTEND_URL}/unsubscribe" style="color:#6b7280;">Unsubscribe</a>
               </p>
             </div>
             """,

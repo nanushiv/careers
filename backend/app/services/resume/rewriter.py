@@ -74,7 +74,7 @@ class ResumeRewriter:
         try:
             response = await llm_client.complete(
                 prompt=prompt,
-                model="gemini-2.5-flash-lite",
+                model="gemini-2.5-flash",
                 max_tokens=8192,
                 temperature=0.4,
             )
