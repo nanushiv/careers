@@ -160,7 +160,7 @@ class OutreachService:
 
         try:
             llm_resp = await llm_client.complete(
-                prompt, model="gemini-2.5-flash-lite", max_tokens=800, temperature=0.6
+                prompt, model="gemini-2.5-flash", max_tokens=1500, temperature=0.6
             )
             data = llm_resp.as_json()
 
@@ -183,7 +183,7 @@ class OutreachService:
             result.word_count = data.get("word_count", 0)
             result.personalization_hooks = data.get("personalization_hooks", [])
             result.follow_up_suggestion = data.get("follow_up_suggestion", "")
-            result.model_used = "gemini-2.5-flash-lite"
+            result.model_used = "gemini-2.5-flash"
             result.cost_usd = llm_resp.cost_usd
 
             if user_id:

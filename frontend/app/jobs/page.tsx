@@ -80,14 +80,15 @@ export default function JobsPage() {
   const handleFilterChange = async (newFilter: "all" | "high") => {
     setFilter(newFilter);
     if (newFilter === "high" && strongFitJobs.length === 0) {
-      // Fetch worldwide jobs for strong fit (ignore location filter)
       setLoading(true);
       setApiError(null);
       try {
         const token = authToken || await getToken();
         if (!token) return;
+        const params = new URLSearchParams({ limit: "50" });
+        if (searchLocation.trim()) params.set("location", searchLocation.trim());
         const resp = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/jobs/suggestions?limit=50`,
+          `${process.env.NEXT_PUBLIC_API_URL}/jobs/suggestions?${params}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         const data = await resp.json();
@@ -124,7 +125,7 @@ export default function JobsPage() {
           </p>
         </div>
         {isPro && (
-          <button onClick={() => load()} disabled={loading}
+          <button onClick={() => load(searchLocation)} disabled={loading}
             className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 hover:text-gray-200 bg-gray-800 border border-gray-700 rounded-lg transition-colors">
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
             Refresh
@@ -195,7 +196,7 @@ export default function JobsPage() {
               <Briefcase className="w-10 h-10 text-red-400 mx-auto mb-3" />
               <p className="text-gray-300 font-medium mb-1">Could not load jobs</p>
               <p className="text-sm text-gray-500 mb-4">{apiError}</p>
-              <button onClick={() => load()} className="px-4 py-2 bg-gray-800 text-gray-300 text-sm rounded-lg border border-gray-700 hover:bg-gray-700 transition-colors">
+              <button onClick={() => load(searchLocation)} className="px-4 py-2 bg-gray-800 text-gray-300 text-sm rounded-lg border border-gray-700 hover:bg-gray-700 transition-colors">
                 Try again
               </button>
             </div>
