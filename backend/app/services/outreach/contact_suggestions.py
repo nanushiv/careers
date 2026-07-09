@@ -62,7 +62,7 @@ async def get_contact_suggestions(
         )
 
         llm_resp = await llm_client.complete(
-            prompt, model="gemini-2.5-flash-lite", max_tokens=1500, temperature=0.7
+            prompt, model="gemini-2.0-flash", max_tokens=1500, temperature=0.7
         )
         data = llm_resp.as_json()
 

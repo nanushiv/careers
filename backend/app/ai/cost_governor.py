@@ -87,23 +87,9 @@ class CostGovernor:
             }
 
     def select_model(self, plan: str, analysis_type: str, mode: str) -> str:
-        """Select the most cost-effective model for this context."""
-        if mode == "degraded":
-            return "gemini-2.5-flash"
-
-        # Full quality — select by analysis type
-        model_map = {
-            "recruiter": "gemini-2.5-flash",
-            "readiness": "gemini-2.5-flash",
-            "ats": "gemini-2.5-flash",
-            "role_fit": "gemini-2.5-flash",
-            "interview_questions": "gemini-2.5-flash",
-            "weekly_synthesis": "gemini-2.5-flash",
-        }
-
-        # Pro users get flash for everything — no pro upgrade needed for flash
-        # Pro price_id in future = gemini-pro for premium quality
-        return model_map.get(analysis_type, "gemini-2.5-flash")
+        """Select model. gemini-2.0-flash has 1500 free req/day; 2.5-flash has ~50."""
+        # gemini-2.0-flash: 1500 req/day free, same quality for structured analysis
+        return "gemini-2.0-flash"
 
 
 cost_governor = CostGovernor()

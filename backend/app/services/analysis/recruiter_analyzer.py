@@ -86,7 +86,7 @@ class RecruiterAnalyzer:
 
         try:
             llm_resp = await llm_client.complete(
-                prompt, model=model, max_tokens=8192, temperature=0.4
+                prompt, model=model, max_tokens=3000, temperature=0.4
             )
             data = llm_resp.as_json()
 

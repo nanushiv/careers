@@ -215,7 +215,7 @@ class InsightEngine:
                 previous_insight_titles=", ".join([r["title"] for r in recent_insights[:5]]),
             )
 
-            resp = await llm_client.complete(prompt, model="gemini-2.5-flash-lite", max_tokens=1500)
+            resp = await llm_client.complete(prompt, model="gemini-2.0-flash", max_tokens=1500)
             data = resp.as_json()
 
             return [

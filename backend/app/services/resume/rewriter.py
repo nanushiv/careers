@@ -74,8 +74,8 @@ class ResumeRewriter:
         try:
             response = await llm_client.complete(
                 prompt=prompt,
-                model="gemini-2.5-flash",
-                max_tokens=8192,
+                model="gemini-2.0-flash",
+                max_tokens=3000,
                 temperature=0.4,
             )
         except Exception as e:
