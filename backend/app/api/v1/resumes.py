@@ -158,11 +158,7 @@ async def trigger_rewrite(
         raise HTTPException(status_code=404, detail="User not found")
     user = user_resp.data[0]
 
-    if user["plan"] == "free" and not is_admin(user.get("email", "")):
-        raise HTTPException(
-            status_code=402,
-            detail={"code": "PRO_REQUIRED", "message": "Auto-fix resume is a Pro feature.", "upgrade_url": "/pricing"},
-        )
+
 
     resume_resp = supabase.table("resumes").select("*").eq(
         "id", resume_id

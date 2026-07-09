@@ -98,13 +98,22 @@ export default function AnalysisResultsPage() {
           );
           const jobData = await jobResp.json();
           if (jobData?.data?.status === "failed") {
-            const err = jobData?.data?.error || "";
-            const msg = err.includes("restarted")
-              ? "The server restarted mid-analysis. Please go back and run a fresh analysis."
-              : err.includes("quota") || err.includes("AI quota")
-              ? "Daily AI quota reached — resets at ~12:30 PM IST. Please try again tomorrow."
-              : "Analysis failed. Please try again in a minute.";
-            stop(msg);
+            // Load whatever analyses completed before the failure — show them instead of blocking
+            const partial = await api.listAnalyses(token, { resume_id: resumeId });
+            const real = (partial.data || []).filter((a: any) => a.analysis_type !== "rewrite");
+            if (real.length > 0) {
+              setAnalyses(partial.data || []);
+              checkRewriteRecord(partial.data || []);
+              stop();
+            } else {
+              const err = jobData?.data?.error || "";
+              const msg = err.includes("restarted")
+                ? "The server restarted mid-analysis. Please go back and run a fresh analysis."
+                : err.includes("quota") || err.includes("AI quota")
+                ? "Daily AI quota reached — resets at ~12:30 PM IST. Please try again tomorrow."
+                : "Analysis failed. Please try again in a minute.";
+              stop(msg);
+            }
             return;
           }
         } catch { /* job status check is best-effort */ }
