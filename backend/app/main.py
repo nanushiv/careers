@@ -101,8 +101,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins_list,
-    # Allow Vercel preview deployments only in non-production environments
-    allow_origin_regex=r"https://.*\.vercel\.app" if settings.APP_ENV != "production" else None,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
